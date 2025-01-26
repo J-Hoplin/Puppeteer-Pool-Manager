@@ -1,4 +1,10 @@
 /**
+ * Error for application
+ *
+ *
+ */
+
+/**
  * Exception for pool not initialized
  */
 export class PoolManagerNotInitializedException extends Error {

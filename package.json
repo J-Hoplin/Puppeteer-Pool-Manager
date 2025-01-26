@@ -23,6 +23,9 @@
     "pino-pretty": "^11.2.2",
     "puppeteer": "^23.1.1"
   },
+  "peerDependencies": {
+    "puppeteer": "^23.1.1"
+  },
   "devDependencies": {
     "@trivago/prettier-plugin-sort-imports": "^4.3.0",
     "@types/dotenv": "^8.2.0",
@@ -31,7 +34,7 @@
     "@types/pidusage": "^2.0.5",
     "@typescript-eslint/eslint-plugin": "^8.2.0",
     "@typescript-eslint/parser": "^8.2.0",
-    "eslint": "^9.9.1",
+    "eslint": "^8.3.1",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.2.1",
     "husky": "^9.1.5",
@@ -39,7 +42,8 @@
     "prettier-plugin-sort-imports": "^1.8.6",
     "tsc-watch": "^6.2.0",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "puppeteer": "^23.1.1"
   },
   "scripts": {
     "prepare": "husky",

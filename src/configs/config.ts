@@ -1,5 +1,6 @@
-import { ManagerConfigValidationException } from './error';
-import { poolLogger as logger } from './logger';
+import { ValidateBoolean, ValidateInteager, ValidateRange } from './validator';
+import { poolLogger as logger } from 'src/logger';
+
 import * as fs from 'fs';
 
 /**
@@ -41,68 +42,8 @@ const config = {
   },
 };
 
-function ValidateInteager(
-  value: number,
-  least: number,
-  section: string,
-  valueName = 'Value',
-): void {
-  if (typeof value !== 'number') {
-    throw new ManagerConfigValidationException(
-      `[${section}] Value should be number - ${valueName}: ${value}`,
-    );
-  }
-  if (value < 0) {
-    throw new ManagerConfigValidationException(
-      `[${section}] Negative number not allowed - ${valueName}: ${value}`,
-    );
-  }
-  if (value < least) {
-    throw new ManagerConfigValidationException(
-      `[${section}] ${valueName} should be larger or equal than ${least} - ${valueName}: ${value}`,
-    );
-  }
-}
-
-function ValidateRange(
-  minRange: number,
-  maxRange: number,
-  leastRange: number,
-  section: string,
-  minRangeName: string = 'Min',
-  maxRangeName: string = 'Max',
-): void {
-  if (typeof minRange !== 'number' || typeof maxRange !== 'number') {
-    throw new ManagerConfigValidationException(
-      `[${section}] Value should be number - ${minRangeName}: ${minRange}, ${maxRangeName}: ${maxRange}`,
-    );
-  }
-  if (minRange < 0 || maxRange < 0) {
-    throw new ManagerConfigValidationException(
-      `[${section}] Negative number not allowed - ${minRangeName}: ${minRange}, ${maxRangeName}: ${maxRange}`,
-    );
-  }
-  if (minRange < leastRange) {
-    throw new ManagerConfigValidationException(
-      `[${section}] ${minRangeName} value should be larger or equal than ${leastRange} - ${minRangeName}: ${minRange}`,
-    );
-  }
-  if (minRange > maxRange) {
-    throw new ManagerConfigValidationException(
-      `[${section}] ${minRangeName} should be less than ${maxRangeName} value - ${minRangeName}: ${minRange}, ${maxRangeName}: ${maxRange}`,
-    );
-  }
-}
-
-function ValidateBoolean(value: boolean, section: string): void {
-  if (typeof value !== 'boolean') {
-    throw new ManagerConfigValidationException(
-      `[${section}] Value should be boolean`,
-    );
-  }
-}
-
-export const load = (configPath: string = null) => {
+export type ConfigType = typeof config;
+export const loadConfig = (configPath: string = null): ConfigType => {
   let loadedConfig = null;
   try {
     loadedConfig = JSON.parse(
