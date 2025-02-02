@@ -1,4 +1,4 @@
-import { ManagerConfigValidationException } from 'src/error';
+import { ManagerConfigValidationException } from '../error/validator';
 
 export function ValidateInteager(
   value: number,

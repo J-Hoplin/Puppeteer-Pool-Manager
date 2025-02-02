@@ -21,10 +21,10 @@
     "pidusage": "^3.0.2",
     "pino": "^9.3.2",
     "pino-pretty": "^11.2.2",
-    "puppeteer": "^23.1.1"
+    "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {
-    "puppeteer": "^23.1.1"
+    "puppeteer": "^24.1.1"
   },
   "devDependencies": {
     "@trivago/prettier-plugin-sort-imports": "^4.3.0",
@@ -40,10 +40,10 @@
     "husky": "^9.1.5",
     "prettier": "^3.3.3",
     "prettier-plugin-sort-imports": "^1.8.6",
+    "puppeteer": "^23.1.1",
     "tsc-watch": "^6.2.0",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.5.4",
-    "puppeteer": "^23.1.1"
+    "typescript": "^5.5.4"
   },
   "scripts": {
     "prepare": "husky",
