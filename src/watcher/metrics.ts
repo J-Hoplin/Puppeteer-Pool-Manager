@@ -14,7 +14,7 @@ export class MetricsWatcher {
   public startThresholdWatcher(
     limit: { cpu: number; memory: number },
     cbOverThreshold: () => Promise<void>,
-    checkInterval: number = 5000,
+    checkIntervalSecond: number,
   ) {
     /**
      * cpu: Should be a percentage
@@ -27,11 +27,11 @@ export class MetricsWatcher {
         metrics.memoryUsageValue > limit.memory
       ) {
         poolLogger.warn(
-          `Over threshold: CPU: ${metrics.cpuUsage} Memory: ${metrics.memoryUsageValue}`,
+          `Over threshold: CPU: ${metrics.cpuUsage.toFixed(2)}% Memory: ${metrics.memoryUsageValue.toFixed(2)}MB`,
         );
         await cbOverThreshold();
       }
-    }, checkInterval);
+    }, checkIntervalSecond * 1000);
   }
 
   public stopThresholdWatcher() {
@@ -65,7 +65,7 @@ export class MetricsWatcher {
         cpu: cpu,
         memory: memory,
       };
-    } catch (err) {
+    } catch {
       return {
         cpu: 0,
         memory: 0,
@@ -92,7 +92,7 @@ export class MetricsWatcher {
           return [...acc, ...this.getPidsFromProcessRoot(childPid)];
         }, [] as number[]),
       ];
-    } catch (e) {
+    } catch {
       return [pid];
     }
   }

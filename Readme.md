@@ -2,116 +2,6 @@
 
 ![NPM Version](https://img.shields.io/npm/v/%40hoplin%2Fpuppeteer-pool?style=for-the-badge)
 
-> ### Urgent Request! Please update to 1.1.4 or latest version ASAP
->
-> There was an critical error in Threshold Watcher Layer that the Process Tree was not recursively inspected. **From version 1.1.4, the issue has been resolved. If you see this Readme, please update the package as soon as possible. Also if you're using custom `puppeteer-pool-config.json` after update package upperthan 1.1.4 version, please re configure your custom config file.**
-
-<p align="center">
-  <img src="./diagram/diagram.png" alt="Image description">
-</p>
-
-## Are you facing issue?
-
-If there's no other related issue that you are facing in this list, please add issue. Then I'll discuss with you as fast as I can
-
-<details>
-<summary><b>Is there any default Puppeteer launch options that manager is using?</b></summary>
-<div markdown="1">
-
-Yes. there are two default setting that maanger will use. If you want to change these default settings, please override these options.
-
-```javascript
-executablePath: puppeteer.executablePath(),
-headless: true,
-```
-
-</div>
-</details>
-
-<details>
-<summary><b>Bootstrap issue handling in server runtime</b></summary>
-<div markdown="1">
-
-Some servers may have trouble with puppeteer, Like session pool is not initializing or other similar cases. Follow these steps to resolve related issues.
-
-1. Install system dependencies. Puppeteer requires several dependencies to execute.
-
-```
-sudo apt-get install -y libnss3 libatk1.0-0 libx11-xcb1 libxcomposite1 libasound2 libgtk-3-0
-```
-
-2. Install Chronium Browser
-
-```
-sudp apt-get install chromium-browser
-
-which chronium-browser
-```
-
-3. Attach executable path
-
-```typescript
-await bootPoolManager({
-  args: ['--no-sandbox', '--disable-gpu', '--disable-setuid-sandbox'],
-  executablePath: 'Default is puppteeer built in chromium',
-});
-```
-
-</div>
-</details>
-
-<details>
-<summary><b>Issue in ubuntu server, not boot strapped</b></summary>
-<div markdown="1">
-
-You need to install dependencies to start chromium
-
-```
-sudo apt-get install -y \
-    gconf-service \
-    libasound2 \
-    libatk1.0-0 \
-    libc6 \
-    libcairo2 \
-    libcups2 \
-    libdbus-1-3 \
-    libexpat1 \
-    libfontconfig1 \
-    libgcc1 \
-    libgconf-2-4 \
-    libgdk-pixbuf2.0-0 \
-    libglib2.0-0 \
-    libgtk-3-0 \
-    libnspr4 \
-    libpango-1.0-0 \
-    libpangocairo-1.0-0 \
-    libstdc++6 \
-    libx11-6 \
-    libx11-xcb1 \
-    libxcb1 \
-    libxcomposite1 \
-    libxcursor1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    libxi6 \
-    libxrandr2 \
-    libxrender1 \
-    libxss1 \
-    libxtst6 \
-    ca-certificates \
-    fonts-liberation \
-    libappindicator1 \
-    libnss3 \
-    lsb-release \
-    xdg-utils \
-    wget \
-    libgbm-dev
-```
-
-</div>
-</details>
-
 ## Install packages
 
 - `npm`
@@ -131,13 +21,63 @@ sudo apt-get install -y \
   pnpm install @hoplin/puppeteer-pool
   ```
 
-## Go to
+## Fully changed from 2.0.0
 
-[1. 🔧Pool Manager Config Docuemnt](#puppeteer-pool-manager-config)
+The internal implementation is event-based, which significantly improves the stability. In addition, instead of relying on generic-pools to manage the pool, we have solved the problem of third-party dependency and features that were incompatible with generic-pools through our own pooling. However, there are many API changes and some features are currently disabled. If you update to 2.0.0, please be aware of the migration progress and disabled features for the changes.
+Also cluster mode client will be provided in near future.
 
-[2. 📖Pool Manager APIs Document](#puppeteer-pool-manager-apis)
+### API Changes
+From version 2.0.0, client API will return dispatcher instance after initialization.
+After that you can use dispatcher to control pool manager.
 
-[3. 😎Pool Manager Usage with Express.js Framework](#usage-example)
+**[ Client API ]**
+
+- StartPuppeteerPool
+  - Args
+    - concurrencyLevel: number
+      - Number of context level to run tasks concurrently.
+    - contextMode: ContextMode
+      - ContextMode.SHARED(Default): Each session will share local storage, cookies, etc.
+      - ContextMode.ISOLATED: Each session will have its own local storage, cookies, etc.
+    - options: [Puppeteer LaunchOptions](https://pptr.dev/api/puppeteer.launchoptions)
+    - customConfigPath: string
+      - Optional. If you want to use custom config file, you can pass path to config file.
+  - Returns
+    - dispatcher: TaskDispatcher
+      - Dispatcher instance to control pool manager.
+
+- StopPuppeteerPool
+  - Args
+    - dispatcher: TaskDispatcher
+      - Dispatcher instance returned from StartPuppeteerPool
+
+**[ TaskDispatcher API ]**
+
+- dispatchTask<T>
+  - Args
+    - task: RequestedTask<T>
+  - Returns
+    ```typescript
+    {
+      event: EventEmitter,
+      resultListener: Promise<unknown>
+    }
+    ```
+    - event: Check given task's state. You can listen to two event(Node.js Event) task state
+      - RUNNING: Emits when task is running
+      - DONE: Emits when task is done
+    - resultListener: Promise Object for result. resultListener is not callable. You should just await Promise to be resolve.(Same as when 'DONE' event emits)
+
+- getPoolMetrics
+  - Returns
+    ```typescript
+    {
+      memoryUsageValue: number, // Memory Usage
+      memoryUsagePercentage: number, // Memory usage percentage
+      cpuUsage: number, // CPU Usage Percentage
+    };
+    ```
+
 
 ## Support
 
@@ -155,8 +95,6 @@ sudo apt-get install -y \
     - CPU usage of pool
     - Memory usage of pool
     - Managing session count in runtime
-- Graceful Shutdown
-
 ## Puppeteer Pool Manager Config
 
 Default config should be `puppeteer-pool-config.json` in root directory path.
@@ -167,211 +105,40 @@ If config file are not given or invalid path, manager will use default defined c
 
 ```typescript
 {
-  "browser_pool": {
-    "min": 2,
-    "max": 5
+  session_pool: {
+    width: 1080,
+    height: 1024,
   },
-  "session_pool": {
-    "min": 5,
-    "max": 10,
-    "width": 1080,
-    "height": 1024,
-    "ignoreResourceLoad": false,
-    "enablePageCache": false
+  threshold: {
+    activate: true,
+    interval: 5,
+    cpu: 80,
+    memory: 2048,
   },
-  "threshold": {
-    "activate": true,
-    "interval": 5,
-    "cpu": {
-      "break": 80,
-      "warn": 45,
-    },
-    "memory": {
-      "break": 2048,
-      "warn": 800,
-    }
-  }
 }
 ```
-
-### `browser_pool`
-
-- `min`: Minimum pool instance
-- `max`: Maximum pool instance
-  - **Range Validation**
-    - `max` should be larger or equal than `min`
-    - `min` should be larger or equal than 1
-    - Both `min` and `max` should be integer
 
 ### `session_pool`
 
-- `min`: Minimum pool instance
-- `max`: Maximum pool instance
-
-  - **Range Validation**
-    - `max` should be larger or equal than `min`
-    - `min` should be larger or equal than 1
-    - Both `min` and `max` should be integer
-    - Both `min` and `max` does not allow negative number
-
-- `width`: Browser width. Also set browser width and height if you need some acts like capturing screen or else.
+- `width`: Width of session pool
+- `height`: Height of session pool
   - **Inteager Validation**
+    - `width` should be larger or equal than 50
+    - `height` should be larger or equal than 50
     - `width` should be integer
-    - `width` should be at least 50
-    - `width` does not allow negative number
-- `height`: Browser height. Also set browser width and height if you need some acts like capturing screen or else.
-  - **Inteager Validation**
     - `height` should be integer
-    - `height` should be at least 50
-    - `height` does not allow negative number
-- `ignoreResourceLoad`: Ignore resource load(This option makes ignore `image`, `stylesheet`, `font` assets request). If you set true, it will ignore resource load. This will increase performance but may occur some unintended behavior.
-  - **Boolean Validation**
-    - `ignoreResourceLoad` should be boolean
-- `enablePageCache`: Enable page cache. If you set true, it will cache page. This will increase performance but may occur some unintended behavior.
-  - **Boolean Validation**
-    - `enablePageCache` should be boolean
 
 ### `threshold`
 
-- `activate`: Activate threshold or not
-  - **Boolean Validation**
-    - `activate` should be boolean
-- `interval`: Interval of checking threshold
-- `cpu`
-  - `break`: CPU Usage break point. If CPU Usage is over this value, it will log status and reboot session manager puppeteer.
-  - `warn`: CPU Usage warning point. If CPU Usage is over this value, it will log status.
-    - **Range Validation**
-      - `break` should be larger or equal than `warn`
-      - `warn` should be larger or equal than 1
-      - Both `break` and `warn` should be integer
-      - Both `break` and `warn` does not allow negative number
-- `memory`
-  - `break`: Memory Usage break point. If Memory Usage is over this value, it will log and reboot session manager puppeteer.
-  - `warn`: Memory Usage warning point. If Memory Usage is over this value, it will log status.
-    - **Range Validation**
-      - `break` should be larger or equal than `warn`
-      - `warn` should be larger or equal than 100
-      - Both `break` and `warn` should be integer
-      - Both `break` and `warn` does not allow negative number
+- `activate`: Activate threshold watcher
+- `interval`: Interval of threshold watcher
+- `cpu`: CPU threshold value
+- `memory`: Memory threshold value
+  - **Inteager Validation**
+    - `interval` should be at least 1
+    - `interval` should be integer
+    - `cpu` should be at least 1
+    - `cpu` should be integer
+    - `memory` should be at least 1
+    - `memory` should be integer
 
-## Puppeteer Pool Manager APIs
-
-### `bootPoolManager(puppeteerOptions,poolConfigPath):Promise<void>`
-
-Boot pool manager. **You need to invoke this function at least once to use another APIs**
-
-#### Parameter
-
-- `puppeteerOptions`
-  - `PuppeteerLaunchOptions` from puppeteer([Ref](https://pptr.dev/api/puppeteer.puppeteerlaunchoptions))
-- `poolConfigPath`
-  - `string`
-  - Custom Puppeteer Pool config path. Default is project root's `puppeteer-pool-config.json`
-
-### `rebootPoolManager():Promise<void>`
-
-Reboot pool manager. **This api is not recommended to use. Using this API in runtime may occur unintended session control context break**
-
-### `controlSession(cb):Promise<any>`
-
-Return single session from pool. You need to pass callback function as parameter to use in session.
-
-#### About Callback Function
-
-Manager will pass `session`, which is [`Page`](https://pptr.dev/api/puppeteer.page) type of puppeteer to callback function.
-This API will return result of callback function.
-
-#### Parameter
-
-- `cb`
-
-  - `sessionCallback`
-
-    ```typescript
-    // Session Callback type
-    import { Page } from 'puppeteer';
-
-    type sessionCallback<T> = (page: Page) => Promise<T>;
-    ```
-
-#### Return Value
-
-- Return callback's return value
-
-### `getPoolMetrics():Promise<Array<PoolMetrics>>`
-
-Return pool metrics. This includes pool id, pool CPU Usage, Memory Usage
-
-**Both CPU, Memory values returned are the recursive detection of the process tree in each single pool.**
-
-#### Return Value
-
-```typescript
-[
-  {
-    Id: "ID of pool"
-    CPU: "Percentage of CPU that Pool is using (System)",
-    Memory: "Memory Usage of Memory that Pool is using. Unit is MB (System)",
-    SessionPoolCount: "Session count that Pool is managing"
-  }
-]
-
-```
-
-## Usage Example
-
-Example of combining pool manager with Express Framework
-
-```typescript
-import {
-  bootPoolManager,
-  controlSession,
-  getPoolMetrics,
-} from '@hoplin/puppeteer-pool';
-import express, { Application } from 'express';
-
-async function bootstrap() {
-  // Initialize pool
-  await bootPoolManager({Puppeteer Launch Options},'Puppeteer Pool Config Path');
-
-  const server: Application = express();
-
-  // Control Session example
-  server.post('/', async (req, res) => {
-    const url = req.body.url;
-
-    // Get single session from pool
-    const controlResponse = await controlSession(async (session) => {
-      /**
-       * Control session here
-       */
-      return; //(Some values)
-    });
-    return res.status(200).json({ result: controlResponse });
-  });
-
-  server.get('/metrics',async(req,res,) => {
-    let puppeteerPoolMetrics = await getPoolMetrics();
-    puppeteerPoolMetrics = puppeteerPoolMetrics.map((metrics) => {
-        const id = `POOL_${metrics.Id}`;
-        const cpu = `${metrics.CPU}%`;
-        const memory =
-          metrics.Memory > 1024
-            ? `${parseFloat((metrics.Memory / 1024).toFixed(2))}GB`
-            : `${metrics.Memory}MB`;
-        const sessionPoolCount = metrics.SessionPoolCount;
-        return { id, cpu, memory, sessionPoolCount };
-      })
-    return res.status(200).json({ result: puppeteerPoolMetrics })
-  })
-
-  server.get('/', async (req, res) => {
-    const puppeteerPoolMetrics = await getPoolMetrics();
-    return res.status(200).json(puppeteerPoolMetrics);
-  });
-
-  server.listen(3000, () => {
-    logger.info(`Server listening on port 3000`);
-  });
-}
-```

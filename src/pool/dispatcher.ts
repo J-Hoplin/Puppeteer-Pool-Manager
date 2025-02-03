@@ -1,10 +1,9 @@
+import { IsolateContext, SharedContext, TaskContext } from './context';
 import { RequestedTask, RunTaskResponse } from '../types/type';
 import { PoolNotInitializedException } from '../error/pool';
-import { IsolateContext } from './context/isolate';
-import { SharedContext } from './context/shared';
-import { TaskContext } from './context/context';
+import { MetricsWatcher } from '../watcher/metrics';
+import { ConfigType, loadConfig } from '../configs';
 import { EventEmitter } from 'node:events';
-import { MetricsWatcher } from './metrics';
 import { Queue } from '../queue/queue';
 import * as puppeteer from 'puppeteer';
 import { poolLogger } from '../logger';
@@ -49,6 +48,7 @@ export class TaskDispatcher extends EventEmitter {
   private concurrencyLevel: number = 1;
   private contextMode: ContextMode = ContextMode.SHARED;
   private launchOptions: puppeteer.LaunchOptions = {};
+  private poolConfig: ConfigType;
   private threshold: { cpu: number; memory: number } = {
     cpu: 80,
     memory: 1024,
@@ -83,14 +83,22 @@ export class TaskDispatcher extends EventEmitter {
     concurrencyLevel: number = 1,
     contextMode: ContextMode = ContextMode.SHARED,
     options: puppeteer.LaunchOptions = {},
-    threshold?: { cpu: number; memory: number },
+    customPoolConfigPath?: string,
   ) {
+    this.poolConfig = loadConfig(customPoolConfigPath);
     poolLogger.info('Initializing Task Dispatcher');
     this.concurrencyLevel = concurrencyLevel;
     this.contextMode = contextMode;
-    this.browser = await puppeteer.launch(options);
     this.launchOptions = options;
-    this.threshold = threshold || this.threshold;
+    this.browser = await puppeteer.launch({
+      ...this.launchOptions,
+      defaultViewport: {
+        width: this.poolConfig.session_pool.width,
+        height: this.poolConfig.session_pool.height,
+      },
+    });
+
+    // Initialize contexts
     for (let i = 0; i < concurrencyLevel; i++) {
       let id;
       if (contextMode === ContextMode.SHARED) {
@@ -104,11 +112,24 @@ export class TaskDispatcher extends EventEmitter {
       }
       poolLogger.info(`Context initialized - ID: ${id}`);
     }
+    // Start Metrics Watcher
     this.metricsWatcher = new MetricsWatcher(this.browser.process().pid);
-    this.metricsWatcher.startThresholdWatcher(threshold, async () => {
-      await this.restartBrowserAndContexts();
-    });
+    if (this.poolConfig.threshold.activate) {
+      this.threshold = {
+        cpu: this.poolConfig.threshold.cpu,
+        memory: this.poolConfig.threshold.memory,
+      };
+      this.metricsWatcher.startThresholdWatcher(
+        this.threshold,
+        async () => {
+          await this.restartBrowserAndContexts();
+        },
+        this.poolConfig.threshold.interval,
+      );
+    }
+    // Set state as isInitialized
     this.isInitialized = true;
+    // Emit run task for task queue is not empty.
     if (!this.taskQueue.isEmpty) {
       this.emit(this.runTaskEvent);
     }
@@ -127,7 +148,6 @@ export class TaskDispatcher extends EventEmitter {
     try {
       const contextMode = this.contextMode;
       const concurrencyLevel = this.concurrencyLevel;
-      const browserOptions = this.launchOptions;
       poolLogger.info(
         `Waiting for running tasks to complete... ${this.runningContextQueue.size} task`,
       );
@@ -146,7 +166,13 @@ export class TaskDispatcher extends EventEmitter {
       this.runningContextQueue.clear();
 
       // Reinitialize browser and contexts
-      this.browser = await puppeteer.launch(browserOptions);
+      this.browser = await puppeteer.launch({
+        ...this.launchOptions,
+        defaultViewport: {
+          width: this.poolConfig.session_pool.width,
+          height: this.poolConfig.session_pool.height,
+        },
+      });
       for (let i = 0; i < concurrencyLevel; i++) {
         let id;
         if (contextMode === ContextMode.SHARED) {
@@ -161,7 +187,19 @@ export class TaskDispatcher extends EventEmitter {
         poolLogger.info(`Context initialized - ID: ${id}`);
       }
       this.metricsWatcher = new MetricsWatcher(this.browser.process().pid);
-
+      if (this.poolConfig.threshold.activate) {
+        this.threshold = {
+          cpu: this.poolConfig.threshold.cpu,
+          memory: this.poolConfig.threshold.memory,
+        };
+        this.metricsWatcher.startThresholdWatcher(
+          this.threshold,
+          async () => {
+            await this.restartBrowserAndContexts();
+          },
+          this.poolConfig.threshold.interval,
+        );
+      }
       poolLogger.info('Restart Completed!');
     } catch (error) {
       poolLogger.error('Fail to restart:', error);
@@ -184,7 +222,7 @@ export class TaskDispatcher extends EventEmitter {
     const event = new EventEmitter();
     const taskId = this.taskQueue.enqueue(task);
     this.taskEvents.set(taskId, event);
-    const resultListener = new Promise((resolve, reject) => {
+    const resultListener = new Promise((resolve) => {
       // Wait until task is done and return result
       event.once(EventTags.DONE, (result: RunTaskResponse<T>) => {
         resolve(result);
@@ -194,6 +232,13 @@ export class TaskDispatcher extends EventEmitter {
       }
     });
     return { event, resultListener };
+  }
+
+  async getPoolMetrics() {
+    if (!this.isInitialized) {
+      throw new PoolNotInitializedException();
+    }
+    return this.metricsWatcher.metrics();
   }
 
   private async executeTask(
