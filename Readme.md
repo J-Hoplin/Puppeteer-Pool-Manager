@@ -27,12 +27,14 @@ The internal implementation is event-based, which significantly improves the sta
 Also cluster mode client will be provided in near future.
 
 ### API Changes
+
 From version 2.0.0, client API will return dispatcher instance after initialization.
 After that you can use dispatcher to control pool manager.
 
 **[ Client API ]**
 
 - StartPuppeteerPool
+
   - Args
     - concurrencyLevel: number
       - Number of context level to run tasks concurrently.
@@ -54,6 +56,7 @@ After that you can use dispatcher to control pool manager.
 **[ TaskDispatcher API ]**
 
 - dispatchTask<T>
+
   - Args
     - task: RequestedTask<T>
   - Returns
@@ -78,7 +81,6 @@ After that you can use dispatcher to control pool manager.
     };
     ```
 
-
 ## Support
 
 - Pool Managing
@@ -95,6 +97,7 @@ After that you can use dispatcher to control pool manager.
     - CPU usage of pool
     - Memory usage of pool
     - Managing session count in runtime
+
 ## Puppeteer Pool Manager Config
 
 Default config should be `puppeteer-pool-config.json` in root directory path.
@@ -141,4 +144,3 @@ If config file are not given or invalid path, manager will use default defined c
     - `cpu` should be integer
     - `memory` should be at least 1
     - `memory` should be integer
-
