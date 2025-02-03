@@ -4,10 +4,11 @@ import { IsolateContext } from './context/isolate';
 import { SharedContext } from './context/shared';
 import { TaskContext } from './context/context';
 import { EventEmitter } from 'node:events';
+import { MetricsWatcher } from './metrics';
 import { Queue } from '../queue/queue';
 import * as puppeteer from 'puppeteer';
 import { poolLogger } from '../logger';
-import 'reflect-metadata';
+
 /**
  * Enumeration for Task Dispatcher init
  *
@@ -39,6 +40,20 @@ export class TaskDispatcher extends EventEmitter {
   // Internal Event
   private runTaskEvent = 'RUN_TASK';
 
+  // Metrics Watcher and Threshold Watcher
+  private metricsWatcher: MetricsWatcher;
+
+  // States
+  private isInitialized: boolean = false;
+  private isRestarting: boolean = false;
+  private concurrencyLevel: number = 1;
+  private contextMode: ContextMode = ContextMode.SHARED;
+  private launchOptions: puppeteer.LaunchOptions = {};
+  private threshold: { cpu: number; memory: number } = {
+    cpu: 80,
+    memory: 1024,
+  };
+
   private taskEvents: Map<string, EventEmitter> = new Map<
     string,
     EventEmitter
@@ -47,9 +62,7 @@ export class TaskDispatcher extends EventEmitter {
   constructor() {
     super();
     this.on(this.runTaskEvent, async () => {
-      // async 추가
       if (!this.browser) {
-        // browser 초기화 체크 추가
         return;
       }
       if (this.taskQueue.isEmpty || this.idleContextQueue.isEmpty) {
@@ -62,7 +75,7 @@ export class TaskDispatcher extends EventEmitter {
         context.element,
         task.id,
         task.element,
-      ); // await 추가
+      );
     });
   }
 
@@ -70,9 +83,14 @@ export class TaskDispatcher extends EventEmitter {
     concurrencyLevel: number = 1,
     contextMode: ContextMode = ContextMode.SHARED,
     options: puppeteer.LaunchOptions = {},
+    threshold?: { cpu: number; memory: number },
   ) {
     poolLogger.info('Initializing Task Dispatcher');
+    this.concurrencyLevel = concurrencyLevel;
+    this.contextMode = contextMode;
     this.browser = await puppeteer.launch(options);
+    this.launchOptions = options;
+    this.threshold = threshold || this.threshold;
     for (let i = 0; i < concurrencyLevel; i++) {
       let id;
       if (contextMode === ContextMode.SHARED) {
@@ -86,13 +104,81 @@ export class TaskDispatcher extends EventEmitter {
       }
       poolLogger.info(`Context initialized - ID: ${id}`);
     }
+    this.metricsWatcher = new MetricsWatcher(this.browser.process().pid);
+    this.metricsWatcher.startThresholdWatcher(threshold, async () => {
+      await this.restartBrowserAndContexts();
+    });
+    this.isInitialized = true;
+    if (!this.taskQueue.isEmpty) {
+      this.emit(this.runTaskEvent);
+    }
+  }
+
+  private async restartBrowserAndContexts() {
+    if (!this.isInitialized) {
+      throw new PoolNotInitializedException();
+    }
+    if (this.isRestarting) {
+      poolLogger.info('Restart already in progress, skipping...');
+      return;
+    }
+
+    this.isRestarting = true;
+    try {
+      const contextMode = this.contextMode;
+      const concurrencyLevel = this.concurrencyLevel;
+      const browserOptions = this.launchOptions;
+      poolLogger.info(
+        `Waiting for running tasks to complete... ${this.runningContextQueue.size} task`,
+      );
+      if (this.runningContextQueue.size > 0) {
+        await new Promise<void>((resolve) => {
+          const checkInterval = setInterval(() => {
+            if (this.runningContextQueue.size === 0) {
+              clearInterval(checkInterval);
+              resolve();
+            }
+          }, 100);
+        });
+      }
+      await this.close();
+      this.idleContextQueue.clear();
+      this.runningContextQueue.clear();
+
+      // Reinitialize browser and contexts
+      this.browser = await puppeteer.launch(browserOptions);
+      for (let i = 0; i < concurrencyLevel; i++) {
+        let id;
+        if (contextMode === ContextMode.SHARED) {
+          const instance = new SharedContext(this.browser);
+          await instance.init();
+          id = this.idleContextQueue.enqueue(instance);
+        } else {
+          const instance = new IsolateContext(this.browser);
+          await instance.init();
+          id = this.idleContextQueue.enqueue(instance);
+        }
+        poolLogger.info(`Context initialized - ID: ${id}`);
+      }
+      this.metricsWatcher = new MetricsWatcher(this.browser.process().pid);
+
+      poolLogger.info('Restart Completed!');
+    } catch (error) {
+      poolLogger.error('Fail to restart:', error);
+      throw error;
+    } finally {
+      this.isRestarting = false;
+      if (!this.taskQueue.isEmpty) {
+        this.emit(this.runTaskEvent);
+      }
+    }
   }
 
   async dispatchTask<T>(task: RequestedTask<T>): Promise<{
     event: EventEmitter;
     resultListener: Promise<unknown>;
   }> {
-    if (!this.browser) {
+    if (!this.isInitialized) {
       throw new PoolNotInitializedException();
     }
     const event = new EventEmitter();
@@ -116,15 +202,17 @@ export class TaskDispatcher extends EventEmitter {
     taskId: string,
     task: RequestedTask,
   ) {
-    poolLogger.info(`Task ${taskId} started in context ${contextId}`);
-    this.runningContextQueue.enqueue(context);
-    const taskEvent = this.taskEvents.get(taskId);
-    // taskEvent가 undefined인지 체크 추가
-    if (!taskEvent) {
-      poolLogger.error(`No event emitter found for task ${taskId}`);
-      return;
+    if (!this.isInitialized) {
+      throw new PoolNotInitializedException();
     }
+    this.runningContextQueue.enqueue(context, contextId);
+    const taskEvent = this.taskEvents.get(taskId);
     taskEvent.emit(EventTags.RUNNING);
+    // Recover context if non-responsive
+    if (!(await context.checkContextResponsive())) {
+      poolLogger.info(`Fixing context due to non-responsive`);
+      await context.fix();
+    }
     const result = await context.runTask(task);
     taskEvent.emit(EventTags.DONE, result);
     // Resolve task event
@@ -139,6 +227,9 @@ export class TaskDispatcher extends EventEmitter {
   }
 
   public async close() {
+    if (this.metricsWatcher) {
+      this.metricsWatcher.stopThresholdWatcher();
+    }
     await this.browser.close();
   }
 }

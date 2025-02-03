@@ -11,7 +11,7 @@ export abstract class TaskContext {
     protected readonly contextTimeoutSecond: number = 10,
   ) {}
 
-  protected async checkPageResponsive() {
+  public async checkContextResponsive() {
     try {
       await this.page.evaluate(
         () => true,

@@ -14,17 +14,15 @@ type QueueElement<T> = {
 export class Queue<T> {
   private queue: QueueElement<T>[] = [];
 
-  public enqueue(element: T, prefix?: string): string {
+  public enqueue(element: T, id?: string): string {
     // Suppress UUID usage for CPU Intensive Task
-    const id = prefix
-      ? `${prefix}_${Math.random().toString(36).substring(7)}`
-      : Math.random().toString(36).substring(7);
+    const elementId = id || Math.random().toString(36).substring(7);
     this.queue.push({
-      id: id,
+      id: elementId,
       element,
       enqueuedAt: new Date(),
     });
-    return id;
+    return elementId;
   }
 
   public dequeue(): QueueElement<T> {
@@ -38,11 +36,23 @@ export class Queue<T> {
     this.queue = this.queue.filter((element) => element.id !== id);
   }
 
-  public get length(): number {
+  public get size(): number {
     return this.queue.length;
   }
 
   public get isEmpty(): boolean {
     return this.queue.length === 0;
+  }
+
+  public clear(): void {
+    this.queue = [];
+  }
+
+  public contains(id: string): boolean {
+    return this.queue.some((element) => element.id === id);
+  }
+
+  public values(): QueueElement<T>[] {
+    return this.queue;
   }
 }
