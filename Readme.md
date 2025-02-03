@@ -80,33 +80,33 @@ After that you can use dispatcher to control pool manager.
       cpuUsage: number, // CPU Usage Percentage
     };
     ```
-    
+
 ## Simple Demo
 
 ```typescript
-import { ContextMode, StartPuppeteerPool } from "@hoplin/puppeteer-pool";
+import { ContextMode, StartPuppeteerPool } from '@hoplin/puppeteer-pool';
 
 async function main() {
   const instance = await StartPuppeteerPool(3, ContextMode.ISOLATED);
   const urls = [
-    "https://www.google.com",
-    "https://www.bing.com",
-    "https://www.yahoo.com",
-    "https://www.duckduckgo.com",
-    "https://www.ask.com",
+    'https://www.google.com',
+    'https://www.bing.com',
+    'https://www.yahoo.com',
+    'https://www.duckduckgo.com',
+    'https://www.ask.com',
   ];
   let taskCounter = 0;
   for (const url of urls) {
-    const taskId = `TASK_${String(++taskCounter).padStart(3, "0")}`;
+    const taskId = `TASK_${String(++taskCounter).padStart(3, '0')}`;
     const { event, resultListener } = await instance.dispatchTask(
       async (page) => {
         await page.goto(url);
         return await page.title();
-      }
+      },
     );
     const result = await resultListener;
     console.log(`[${taskId}] Result:`, result);
-    console.log("-".repeat(50));
+    console.log('-'.repeat(50));
   }
 }
 main();
