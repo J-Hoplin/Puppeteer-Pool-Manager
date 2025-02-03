@@ -2,23 +2,23 @@
 
 ![NPM Version](https://img.shields.io/npm/v/%40hoplin%2Fpuppeteer-pool?style=for-the-badge)
 
-## Install packages
+## Package Installation
 
 - `npm`
 
   ```
-  npm i @hoplin/puppeteer-pool
+  npm i puppeteer @hoplin/puppeteer-pool
   ```
 
 - `yarn`
 
   ```
-  yarn add @hoplin/puppeteer-pool
+  yarn add puppeteer @hoplin/puppeteer-pool
   ```
 
 - `pnpm`
   ```
-  pnpm install @hoplin/puppeteer-pool
+  pnpm install puppeteer @hoplin/puppeteer-pool
   ```
 
 ## Fully changed from 2.0.0
