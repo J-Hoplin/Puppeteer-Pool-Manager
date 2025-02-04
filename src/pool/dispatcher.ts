@@ -3,27 +3,11 @@ import { RequestedTask, RunTaskResponse } from '../types/type';
 import { PoolNotInitializedException } from '../error/pool';
 import { MetricsWatcher } from '../watcher/metrics';
 import { ConfigType, loadConfig } from '../configs';
+import { ContextMode, EventTags } from './enum';
 import { EventEmitter } from 'node:events';
 import { Queue } from '../queue/queue';
 import * as puppeteer from 'puppeteer';
 import { poolLogger } from '../logger';
-
-/**
- * Enumeration for Task Dispatcher init
- *
- * SHARED: All request will share cookies and local storage
- * ISOLATED: All request will have their own cookies and local storage (Browser Context)
- */
-export enum ContextMode {
-  SHARED = 'SHARED',
-  ISOLATED = 'ISOLATED',
-}
-
-export enum EventTags {
-  RUNNING = 'RUNNING',
-  PENDING = 'PENDING',
-  DONE = 'DONE',
-}
 
 const DEFAULT_VALUES = {
   CONCURRENCY_LEVEL: 1,
@@ -231,10 +215,7 @@ export class TaskDispatcher extends EventEmitter {
     }
   }
 
-  async dispatchTask<T>(task: RequestedTask<T>): Promise<{
-    event: EventEmitter;
-    resultListener: Promise<unknown>;
-  }> {
+  async dispatchTask<T>(task: RequestedTask<T>): Promise<Promise<unknown>> {
     if (!this.isInitialized) {
       throw new PoolNotInitializedException();
     }
@@ -247,11 +228,12 @@ export class TaskDispatcher extends EventEmitter {
         resolve(result);
       });
       // Emit run task if idle context exist and dispatcher is not restarting state
+      // If dispatcher is restarting, task will be pending until restart is completed
       if (!this.isRestarting && !this.idleContextQueue.isEmpty) {
         this.emit(this.runTaskEvent);
       }
     });
-    return { event, resultListener };
+    return resultListener;
   }
 
   async getPoolMetrics() {

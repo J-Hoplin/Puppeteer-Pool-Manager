@@ -23,7 +23,11 @@
 
 ## Fully changed from 2.0.0
 
-The internal implementation is event-based, which significantly improves the stability. In addition, instead of relying on generic-pools to manage the pool, we have solved the problem of third-party dependency and features that were incompatible with generic-pools through our own pooling. However, there are many API changes and some features are currently disabled. If you update to 2.0.0, please be aware of the migration progress and disabled features for the changes.
+The internal implementation is event-based, which significantly improves the stability. In addition, instead of relying
+on generic-pools to manage the pool, we have solved the problem of third-party dependency and features that were
+incompatible with generic-pools through our own pooling. However, there are many API changes and some features are
+currently disabled. If you update to 2.0.0, please be aware of the migration progress and disabled features for the
+changes.
 Also cluster mode client will be provided in near future.
 
 ### API Changes
@@ -33,99 +37,97 @@ After that you can use dispatcher to control pool manager.
 
 **[ Client API ]**
 
-- StartPuppeteerPool
-
-  - Args
-    - concurrencyLevel: number
-      - Number of context level to run tasks concurrently.
-    - contextMode: ContextMode
-      - ContextMode.SHARED(Default): Each session will share local storage, cookies, etc.
-      - ContextMode.ISOLATED: Each session will have its own local storage, cookies, etc.
-    - options: [Puppeteer LaunchOptions](https://pptr.dev/api/puppeteer.launchoptions)
-    - customConfigPath: string
-      - Optional. If you want to use custom config file, you can pass path to config file.
-  - Returns
-    - dispatcher: TaskDispatcher
-      - Dispatcher instance to control pool manager.
-
-- StopPuppeteerPool
-  - Args
-    - dispatcher: TaskDispatcher
-      - Dispatcher instance returned from StartPuppeteerPool
-
-**[ TaskDispatcher API ]**
-
-- dispatchTask<T>
-
-  - Args
-    - task: RequestedTask<T>
-  - Returns
-    ```typescript
-    {
-      event: EventEmitter,
-      resultListener: Promise<unknown>
-    }
-    ```
-    - event: Check given task's state. You can listen to two event(Node.js Event) task state
-      - RUNNING: Emits when task is running
-      - DONE: Emits when task is done
-    - resultListener: Promise Object for result. resultListener is not callable. You should just await Promise to be resolve.(Same as when 'DONE' event emits)
-
-- getPoolMetrics
-  - Returns
-    ```typescript
-    {
-      memoryUsageValue: number, // Memory Usage
-      memoryUsagePercentage: number, // Memory usage percentage
-      cpuUsage: number, // CPU Usage Percentage
-    };
-    ```
+- PuppeteePool
+    - `PuppeteerPool` is singleton class. You can use `PuppeteerPool.start` to initialize pool manager.
+- PuppeteerPool.start
+    - Static Method
+    - Description: Initialize pool manager. You need to call this function to start puppeteer pool. Even if you invoke
+      this function multiple times with differenct arguments, it will return the first initialized instance.
+    - Args
+        - concurrencyLevel
+            - Required
+            - number
+        - contextMode: ContextMode
+            - Required
+            - ContextMode.ISOLATED | ContextMode.SHARED
+        - options
+            - Optional
+            - [puppeteer.LaunchOptions](https://pptr.dev/api/puppeteer.launchoptions)
+        - customConfigPath
+            - Optional
+            - string (Default: `puppeteer-pool-config.json` in project root)
+    - Return
+        - `Promise<PuppeteerPool>`
+        - Returns PuppeteerPool Instance.
+- Instance<PuppeteerPool>.stop
+    - Description: Stop pool manager. It will close all sessions and terminate pool manager.
+    - Return
+        - `Promise<void>`
+- Instance<PuppeteerPool>.runTask
+    - Description: Run task in pool manager. It will return result of task.
+    - Args
+        - task
+            - Required
+            - Function
+    - Return
+        - `Promise<any>`
+        - Returns result of task(Same return type with task callback return type)
+- Instance<PuppeteerPool>.getPoolMetrics
+    - Description: Get pool metrics. It will return metrics of pool manager.
+    - Return
+      ```json
+          {
+              memoryUsageValue: (Memory Usage in MegaBytes),
+              memoryUsagePercentage: (Memory Usage with percentage),
+              cpuUsage: (CPU Usage with percentage)
+          }
+      ```
 
 ## Simple Demo
 
 ```typescript
-import { ContextMode, StartPuppeteerPool } from '@hoplin/puppeteer-pool';
+import { ContextMode, PuppeteerPool } from "@hoplin/puppeteer-pool";
 
 async function main() {
-  const instance = await StartPuppeteerPool(3, ContextMode.ISOLATED);
+  const poolInstance = await PuppeteerPool.start(5, ContextMode.ISOLATED);
+
   const urls = [
-    'https://www.google.com',
-    'https://www.bing.com',
-    'https://www.yahoo.com',
-    'https://www.duckduckgo.com',
-    'https://www.ask.com',
+    "https://www.google.com",
+    "https://www.bing.com",
+    "https://www.yahoo.com",
   ];
-  let taskCounter = 0;
-  for (const url of urls) {
-    const taskId = `TASK_${String(++taskCounter).padStart(3, '0')}`;
-    const { event, resultListener } = await instance.dispatchTask(
-      async (page) => {
-        await page.goto(url);
-        return await page.title();
-      },
-    );
-    const result = await resultListener;
-    console.log(`[${taskId}] Result:`, result);
-    console.log('-'.repeat(50));
-  }
+
+  console.log(await poolInstance.getPoolMetrics());
+
+  const promises = urls.map((url) =>
+    poolInstance.runTask(async (page) => {
+      await page.goto(url);
+      return await page.title();
+    })
+  );
+
+  const titles = await Promise.all(promises);
+  titles.forEach((title) => console.log(title));
 }
+
 main();
+
 ```
 
 ## Support
 
 - Pool Managing
 - Config
-  - Support config customize
+    - Support config customize
 - Threshold Watcher
-  - CPU
-  - Memory
-  - Support safe pool instance reset in runtime
+    - CPU
+    - Memory
+    - Support safe pool instance reset in runtime
 - Metrics
-  - Support Metric by pool
-    - CPU usage of pool
-    - Memory usage of pool
-    - Managing session count in runtime
+    - Support Metric by pool
+        - CPU usage of pool
+        - Memory usage of pool
+        - Managing session count in runtime
 
 ## Puppeteer Pool Manager Config
 
@@ -133,20 +135,31 @@ Default config should be `puppeteer-pool-config.json` in root directory path.
 
 ### Default config setting
 
-If config file are not given or invalid path, manager will use default defined configurations. Or if you want to pass config path, you can pass path to `bootPoolManager` function as parameter.
+If config file are not given or invalid path, manager will use default defined configurations. Or if you want to pass
+config path, you can pass path to `bootPoolManager` function as parameter.
 
 ```typescript
 {
   session_pool: {
     width: 1080,
-    height: 1024,
-  },
+      height
+  :
+    1024,
+  }
+,
   threshold: {
     activate: true,
-    interval: 5,
-    cpu: 80,
-    memory: 2048,
-  },
+      interval
+  :
+    5,
+      cpu
+  :
+    80,
+      memory
+  :
+    2048,
+  }
+,
 }
 ```
 
@@ -154,11 +167,11 @@ If config file are not given or invalid path, manager will use default defined c
 
 - `width`: Width of session pool
 - `height`: Height of session pool
-  - **Inteager Validation**
-    - `width` should be larger or equal than 50
-    - `height` should be larger or equal than 50
-    - `width` should be integer
-    - `height` should be integer
+    - **Inteager Validation**
+        - `width` should be larger or equal than 50
+        - `height` should be larger or equal than 50
+        - `width` should be integer
+        - `height` should be integer
 
 ### `threshold`
 
@@ -166,10 +179,10 @@ If config file are not given or invalid path, manager will use default defined c
 - `interval`: Interval of threshold watcher
 - `cpu`: CPU threshold value
 - `memory`: Memory threshold value
-  - **Inteager Validation**
-    - `interval` should be at least 1
-    - `interval` should be integer
-    - `cpu` should be at least 1
-    - `cpu` should be integer
-    - `memory` should be at least 1
-    - `memory` should be integer
+    - **Inteager Validation**
+        - `interval` should be at least 1
+        - `interval` should be integer
+        - `cpu` should be at least 1
+        - `cpu` should be integer
+        - `memory` should be at least 1
+        - `memory` should be integer
