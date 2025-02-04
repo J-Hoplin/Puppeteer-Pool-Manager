@@ -38,50 +38,50 @@ After that you can use dispatcher to control pool manager.
 **[ Client API ]**
 
 - PuppeteePool
-    - `PuppeteerPool` is singleton class. You can use `PuppeteerPool.start` to initialize pool manager.
+  - `PuppeteerPool` is singleton class. You can use `PuppeteerPool.start` to initialize pool manager.
 - PuppeteerPool.start
-    - Static Method
-    - Description: Initialize pool manager. You need to call this function to start puppeteer pool. Even if you invoke
-      this function multiple times with differenct arguments, it will return the first initialized instance.
-    - Args
-        - concurrencyLevel
-            - Required
-            - number
-        - contextMode: ContextMode
-            - Required
-            - ContextMode.ISOLATED | ContextMode.SHARED
-        - options
-            - Optional
-            - [puppeteer.LaunchOptions](https://pptr.dev/api/puppeteer.launchoptions)
-        - customConfigPath
-            - Optional
-            - string (Default: `puppeteer-pool-config.json` in project root)
-    - Return
-        - `Promise<PuppeteerPool>`
-        - Returns PuppeteerPool Instance.
+  - Static Method
+  - Description: Initialize pool manager. You need to call this function to start puppeteer pool. Even if you invoke
+    this function multiple times with differenct arguments, it will return the first initialized instance.
+  - Args
+    - concurrencyLevel
+      - Required
+      - number
+    - contextMode: ContextMode
+      - Required
+      - ContextMode.ISOLATED | ContextMode.SHARED
+    - options
+      - Optional
+      - [puppeteer.LaunchOptions](https://pptr.dev/api/puppeteer.launchoptions)
+    - customConfigPath
+      - Optional
+      - string (Default: `puppeteer-pool-config.json` in project root)
+  - Return
+    - `Promise<PuppeteerPool>`
+    - Returns PuppeteerPool Instance.
 - Instance<PuppeteerPool>.stop
-    - Description: Stop pool manager. It will close all sessions and terminate pool manager.
-    - Return
-        - `Promise<void>`
+  - Description: Stop pool manager. It will close all sessions and terminate pool manager.
+  - Return
+    - `Promise<void>`
 - Instance<PuppeteerPool>.runTask
-    - Description: Run task in pool manager. It will return result of task.
-    - Args
-        - task
-            - Required
-            - Function
-    - Return
-        - `Promise<any>`
-        - Returns result of task(Same return type with task callback return type)
+  - Description: Run task in pool manager. It will return result of task.
+  - Args
+    - task
+      - Required
+      - Function
+  - Return
+    - `Promise<any>`
+    - Returns result of task(Same return type with task callback return type)
 - Instance<PuppeteerPool>.getPoolMetrics
-    - Description: Get pool metrics. It will return metrics of pool manager.
-    - Return
-      ```json
-          {
-              memoryUsageValue: (Memory Usage in MegaBytes),
-              memoryUsagePercentage: (Memory Usage with percentage),
-              cpuUsage: (CPU Usage with percentage)
-          }
-      ```
+  - Description: Get pool metrics. It will return metrics of pool manager.
+  - Return
+    ```json
+        {
+            memoryUsageValue: (Memory Usage in MegaBytes),
+            memoryUsagePercentage: (Memory Usage with percentage),
+            cpuUsage: (CPU Usage with percentage)
+        }
+    ```
 
 ## Simple Demo
 
@@ -117,16 +117,16 @@ main();
 
 - Pool Managing
 - Config
-    - Support config customize
+  - Support config customize
 - Threshold Watcher
-    - CPU
-    - Memory
-    - Support safe pool instance reset in runtime
+  - CPU
+  - Memory
+  - Support safe pool instance reset in runtime
 - Metrics
-    - Support Metric by pool
-        - CPU usage of pool
-        - Memory usage of pool
-        - Managing session count in runtime
+  - Support Metric by pool
+    - CPU usage of pool
+    - Memory usage of pool
+    - Managing session count in runtime
 
 ## Puppeteer Pool Manager Config
 
@@ -156,11 +156,11 @@ config path, you can pass path to `bootPoolManager` function as parameter.
 
 - `width`: Width of session pool
 - `height`: Height of session pool
-    - **Inteager Validation**
-        - `width` should be larger or equal than 50
-        - `height` should be larger or equal than 50
-        - `width` should be integer
-        - `height` should be integer
+  - **Inteager Validation**
+    - `width` should be larger or equal than 50
+    - `height` should be larger or equal than 50
+    - `width` should be integer
+    - `height` should be integer
 
 ### `threshold`
 
@@ -168,10 +168,10 @@ config path, you can pass path to `bootPoolManager` function as parameter.
 - `interval`: Interval of threshold watcher
 - `cpu`: CPU threshold value
 - `memory`: Memory threshold value
-    - **Inteager Validation**
-        - `interval` should be at least 1
-        - `interval` should be integer
-        - `cpu` should be at least 1
-        - `cpu` should be integer
-        - `memory` should be at least 1
-        - `memory` should be integer
+  - **Inteager Validation**
+    - `interval` should be at least 1
+    - `interval` should be integer
+    - `cpu` should be at least 1
+    - `cpu` should be integer
+    - `memory` should be at least 1
+    - `memory` should be integer
