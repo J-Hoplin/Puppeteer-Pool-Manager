@@ -86,15 +86,15 @@ After that you can use dispatcher to control pool manager.
 ## Simple Demo
 
 ```typescript
-import { ContextMode, PuppeteerPool } from "@hoplin/puppeteer-pool";
+import { ContextMode, PuppeteerPool } from '@hoplin/puppeteer-pool';
 
 async function main() {
   const poolInstance = await PuppeteerPool.start(5, ContextMode.ISOLATED);
 
   const urls = [
-    "https://www.google.com",
-    "https://www.bing.com",
-    "https://www.yahoo.com",
+    'https://www.google.com',
+    'https://www.bing.com',
+    'https://www.yahoo.com',
   ];
 
   console.log(await poolInstance.getPoolMetrics());
@@ -103,7 +103,7 @@ async function main() {
     poolInstance.runTask(async (page) => {
       await page.goto(url);
       return await page.title();
-    })
+    }),
   );
 
   const titles = await Promise.all(promises);
@@ -111,7 +111,6 @@ async function main() {
 }
 
 main();
-
 ```
 
 ## Support
@@ -138,28 +137,18 @@ Default config should be `puppeteer-pool-config.json` in root directory path.
 If config file are not given or invalid path, manager will use default defined configurations. Or if you want to pass
 config path, you can pass path to `bootPoolManager` function as parameter.
 
-```typescript
+```json
 {
-  session_pool: {
-    width: 1080,
-      height
-  :
-    1024,
+  "session_pool": {
+    "width": 1080,
+    "height": 1024
+  },
+  "threshold": {
+    "activate": true,
+    "interval": 5,
+    "cpu": 80,
+    "memory": 2048
   }
-,
-  threshold: {
-    activate: true,
-      interval
-  :
-    5,
-      cpu
-  :
-    80,
-      memory
-  :
-    2048,
-  }
-,
 }
 ```
 
