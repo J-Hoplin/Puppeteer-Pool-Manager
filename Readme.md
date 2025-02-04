@@ -89,7 +89,7 @@ After that you can use dispatcher to control pool manager.
 import { ContextMode, PuppeteerPool } from '@hoplin/puppeteer-pool';
 
 async function main() {
-  const poolInstance = await PuppeteerPool.start(5, ContextMode.ISOLATED);
+  const poolInstance = await PuppeteerPool.start(2, ContextMode.ISOLATED);
 
   const urls = [
     'https://www.google.com',
