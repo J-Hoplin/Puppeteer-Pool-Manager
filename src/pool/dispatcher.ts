@@ -25,6 +25,20 @@ export enum EventTags {
   DONE = 'DONE',
 }
 
+const DEFAULT_VALUES = {
+  CONCURRENCY_LEVEL: 1,
+  CONTEXT_MODE: ContextMode.SHARED,
+  THRESHOLD: {
+    cpu: 80,
+    memory: 1024,
+  },
+  QUEUE_CHECK_INTERVAL: 100,
+} as const;
+
+const INTERNAL_EVENTS = {
+  RUN_TASK: 'RUN_TASK',
+} as const;
+
 export class TaskDispatcher extends EventEmitter {
   // Task Queue
   private taskQueue: Queue<RequestedTask> = new Queue<RequestedTask>();
@@ -37,7 +51,7 @@ export class TaskDispatcher extends EventEmitter {
   private browser: puppeteer.Browser;
 
   // Internal Event
-  private runTaskEvent = 'RUN_TASK';
+  private runTaskEvent = INTERNAL_EVENTS.RUN_TASK;
 
   // Metrics Watcher and Threshold Watcher
   private metricsWatcher: MetricsWatcher;
@@ -45,14 +59,11 @@ export class TaskDispatcher extends EventEmitter {
   // States
   private isInitialized: boolean = false;
   private isRestarting: boolean = false;
-  private concurrencyLevel: number = 1;
-  private contextMode: ContextMode = ContextMode.SHARED;
+  private concurrencyLevel: number = DEFAULT_VALUES.CONCURRENCY_LEVEL;
+  private contextMode: ContextMode = DEFAULT_VALUES.CONTEXT_MODE;
   private launchOptions: puppeteer.LaunchOptions = {};
   private poolConfig: ConfigType;
-  private threshold: { cpu: number; memory: number } = {
-    cpu: 80,
-    memory: 1024,
-  };
+  private threshold: { cpu: number; memory: number } = DEFAULT_VALUES.THRESHOLD;
 
   private taskEvents: Map<string, EventEmitter> = new Map<
     string,
@@ -80,16 +91,19 @@ export class TaskDispatcher extends EventEmitter {
   }
 
   async init(
-    concurrencyLevel: number = 1,
-    contextMode: ContextMode = ContextMode.SHARED,
+    concurrencyLevel: number = DEFAULT_VALUES.CONCURRENCY_LEVEL,
+    contextMode: ContextMode = DEFAULT_VALUES.CONTEXT_MODE,
     options: puppeteer.LaunchOptions = {},
     customPoolConfigPath?: string,
   ) {
+    // Read Config
     this.poolConfig = loadConfig(customPoolConfigPath);
     poolLogger.info('Initializing Task Dispatcher');
+    // Set instance variables
     this.concurrencyLevel = concurrencyLevel;
     this.contextMode = contextMode;
     this.launchOptions = options;
+    // Initialize Main Browser
     this.browser = await puppeteer.launch({
       ...this.launchOptions,
       defaultViewport: {
@@ -151,6 +165,7 @@ export class TaskDispatcher extends EventEmitter {
       poolLogger.info(
         `Waiting for running tasks to complete... ${this.runningContextQueue.size} task`,
       );
+      // Pending until all of the running tasks are completed
       if (this.runningContextQueue.size > 0) {
         await new Promise<void>((resolve) => {
           const checkInterval = setInterval(() => {
@@ -158,9 +173,10 @@ export class TaskDispatcher extends EventEmitter {
               clearInterval(checkInterval);
               resolve();
             }
-          }, 100);
+          }, DEFAULT_VALUES.QUEUE_CHECK_INTERVAL);
         });
       }
+      // Close browser and previous threshold watcher(If activated) and remove all of the contexts from queue
       await this.close();
       this.idleContextQueue.clear();
       this.runningContextQueue.clear();
@@ -205,8 +221,11 @@ export class TaskDispatcher extends EventEmitter {
       poolLogger.error('Fail to restart:', error);
       throw error;
     } finally {
+      // Change State to Restart
       this.isRestarting = false;
-      if (!this.taskQueue.isEmpty) {
+      // Run task as much as possible after restart. Task can be pending during restart.
+      const maxTask = Math.min(this.taskQueue.size, this.idleContextQueue.size);
+      for (let i = 0; i < maxTask; i++) {
         this.emit(this.runTaskEvent);
       }
     }
@@ -227,7 +246,8 @@ export class TaskDispatcher extends EventEmitter {
       event.once(EventTags.DONE, (result: RunTaskResponse<T>) => {
         resolve(result);
       });
-      if (!this.idleContextQueue.isEmpty) {
+      // Emit run task if idle context exist and dispatcher is not restarting state
+      if (!this.isRestarting && !this.idleContextQueue.isEmpty) {
         this.emit(this.runTaskEvent);
       }
     });
@@ -272,6 +292,7 @@ export class TaskDispatcher extends EventEmitter {
   }
 
   public async close() {
+    // Should stop threshold watcher before closing
     if (this.metricsWatcher) {
       this.metricsWatcher.stopThresholdWatcher();
     }

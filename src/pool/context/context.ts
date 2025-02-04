@@ -36,6 +36,7 @@ export abstract class TaskContext {
     if (this.page) {
       if (this.page.url() !== 'about:blank') {
         // 'about:blank' can't access to local storage
+        // It'll lead to chronium security error if try to access local storage in 'about:blank'
         await this.page.evaluate(() => {
           localStorage.clear();
           sessionStorage.clear();
@@ -73,6 +74,8 @@ export abstract class TaskContext {
           error: e as Error,
         };
       } finally {
+        // Clear resource after task is done
+        // This is to prevent memory leak and to prevent waste of resource
         await this.clearResource();
       }
     }
