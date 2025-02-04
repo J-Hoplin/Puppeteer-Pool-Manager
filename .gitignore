@@ -6,4 +6,5 @@ dist/
 
 .idea
 src/**/*.js
+test.js
 
