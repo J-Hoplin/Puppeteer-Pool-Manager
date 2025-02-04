@@ -94,7 +94,7 @@ async function main() {
   const urls = [
     'https://www.google.com',
     'https://www.bing.com',
-    'https://www.yahoo.com',
+    'https://github.com',
   ];
 
   console.log(await poolInstance.getPoolMetrics());
