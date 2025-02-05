@@ -139,19 +139,19 @@ config path, you can pass path to `start()` function as parameter.
 
 ```json
 {
-  session_pool: {
-    width: 1080,
-    height: 1024,
+  "session_pool": {
+    "width": 1080,
+    "height": 1024
   },
-  context: {
-    timeout: 10,
+  "context": {
+    "timeout": 10
   },
-  threshold: {
-    activate: true,
-    interval: 5,
-    cpu: 80,
-    memory: 2048,
-  },
+  "threshold": {
+    "activate": true,
+    "interval": 5,
+    "cpu": 80,
+    "memory": 2048
+  }
 }
 ```
 
@@ -166,6 +166,7 @@ config path, you can pass path to `start()` function as parameter.
     - `height` should be integer
 
 ### `context`
+
 - `timeout`: Timeout of context.
   - **Inteager Validation**
     - `timeout` should be at least 1
