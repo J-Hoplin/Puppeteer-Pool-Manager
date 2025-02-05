@@ -135,13 +135,16 @@ Default config should be `puppeteer-pool-config.json` in root directory path.
 ### Default config setting
 
 If config file are not given or invalid path, manager will use default defined configurations. Or if you want to pass
-config path, you can pass path to `bootPoolManager` function as parameter.
+config path, you can pass path to `start()` function as parameter.
 
 ```json
 {
   "session_pool": {
     "width": 1080,
     "height": 1024
+  },
+  "context": {
+    "timeout": 10
   },
   "threshold": {
     "activate": true,
@@ -161,6 +164,13 @@ config path, you can pass path to `bootPoolManager` function as parameter.
     - `height` should be larger or equal than 50
     - `width` should be integer
     - `height` should be integer
+
+### `context`
+
+- `timeout`: Timeout of context.
+  - **Inteager Validation**
+    - `timeout` should be at least 1
+    - `timeout` should be integer
 
 ### `threshold`
 

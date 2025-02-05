@@ -16,8 +16,7 @@ export enum ContextState {
  * Set the current state to the required state
  */
 
-// Manage State Metadata for each instance
-const instanceStates = new WeakMap<any, ContextState>();
+const INSTANCE_STATE_KEY = Symbol('instanceState');
 
 export function RequireState(requiredState: ContextState) {
   return function (
@@ -26,9 +25,9 @@ export function RequireState(requiredState: ContextState) {
     descriptor: PropertyDescriptor,
   ) {
     const originalMethod = descriptor.value;
-
     descriptor.value = function (...args: any[]) {
-      const currentState = instanceStates.get(this) || ContextState.IDLE;
+      const currentState =
+        Reflect.getMetadata(INSTANCE_STATE_KEY, this) || ContextState.IDLE;
 
       if (currentState !== requiredState) {
         throw new StateValidationException(
@@ -50,14 +49,13 @@ export function SetState(setState: ContextState) {
     descriptor: PropertyDescriptor,
   ) {
     const originalMethod = descriptor.value;
-
     descriptor.value = async function (...args: any[]) {
       try {
-        instanceStates.set(this, setState);
+        Reflect.defineMetadata(INSTANCE_STATE_KEY, setState, this);
         const result = await originalMethod.apply(this, args);
         return result;
       } finally {
-        instanceStates.set(this, ContextState.IDLE);
+        Reflect.defineMetadata(INSTANCE_STATE_KEY, ContextState.IDLE, this);
       }
     };
 
