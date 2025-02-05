@@ -95,16 +95,21 @@ export class TaskDispatcher extends EventEmitter {
         height: this.poolConfig.session_pool.height,
       },
     });
-
     // Initialize contexts
     for (let i = 0; i < concurrencyLevel; i++) {
       let id;
       if (contextMode === ContextMode.SHARED) {
-        const instance = new SharedContext(this.browser);
+        const instance = new SharedContext(
+          this.browser,
+          this.poolConfig.context.timeout,
+        );
         await instance.init();
         id = this.idleContextQueue.enqueue(instance);
       } else {
-        const instance = new IsolateContext(this.browser);
+        const instance = new IsolateContext(
+          this.browser,
+          this.poolConfig.context.timeout,
+        );
         await instance.init();
         id = this.idleContextQueue.enqueue(instance);
       }
@@ -176,11 +181,17 @@ export class TaskDispatcher extends EventEmitter {
       for (let i = 0; i < concurrencyLevel; i++) {
         let id;
         if (contextMode === ContextMode.SHARED) {
-          const instance = new SharedContext(this.browser);
+          const instance = new SharedContext(
+            this.browser,
+            this.poolConfig.context.timeout,
+          );
           await instance.init();
           id = this.idleContextQueue.enqueue(instance);
         } else {
-          const instance = new IsolateContext(this.browser);
+          const instance = new IsolateContext(
+            this.browser,
+            this.poolConfig.context.timeout,
+          );
           await instance.init();
           id = this.idleContextQueue.enqueue(instance);
         }
@@ -215,24 +226,26 @@ export class TaskDispatcher extends EventEmitter {
     }
   }
 
-  async dispatchTask<T>(task: RequestedTask<T>): Promise<Promise<unknown>> {
+  async dispatchTask<T>(task: RequestedTask<T>): Promise<RunTaskResponse<T>> {
     if (!this.isInitialized) {
       throw new PoolNotInitializedException();
     }
     const event = new EventEmitter();
     const taskId = this.taskQueue.enqueue(task);
     this.taskEvents.set(taskId, event);
-    const resultListener = new Promise((resolve) => {
-      // Wait until task is done and return result
-      event.once(EventTags.DONE, (result: RunTaskResponse<T>) => {
-        resolve(result);
-      });
-      // Emit run task if idle context exist and dispatcher is not restarting state
-      // If dispatcher is restarting, task will be pending until restart is completed
-      if (!this.isRestarting && !this.idleContextQueue.isEmpty) {
-        this.emit(this.runTaskEvent);
-      }
-    });
+    const resultListener: Promise<RunTaskResponse<T>> = new Promise(
+      (resolve) => {
+        // Wait until task is done and return result
+        event.once(EventTags.DONE, (result: RunTaskResponse<T>) => {
+          resolve(result);
+        });
+        // Emit run task if idle context exist and dispatcher is not restarting state
+        // If dispatcher is restarting, task will be pending until restart is completed
+        if (!this.isRestarting && !this.idleContextQueue.isEmpty) {
+          this.emit(this.runTaskEvent);
+        }
+      },
+    );
     return resultListener;
   }
 

@@ -20,6 +20,9 @@ export const app_config = {
     width: 1080,
     height: 1024,
   },
+  context: {
+    timeout: 10,
+  },
   threshold: {
     activate: true,
     interval: 5,
@@ -58,6 +61,17 @@ export const loadConfig = (configPath: string = null): ConfigType => {
       50,
       'Height Config',
       'Height',
+    );
+  }
+  // Context Config
+  if (loadedConfig?.context) {
+    app_config.context.timeout =
+      loadedConfig.context?.timeout ?? app_config.context.timeout;
+    ValidateInteager(
+      app_config.context.timeout,
+      1,
+      'Context Config',
+      'Timeout',
     );
   }
   // Threshold Config
