@@ -1,6 +1,6 @@
 import { ValidateBoolean, ValidateInteager } from './validator';
 
-import { poolLogger } from '../logger';
+import { Logger } from '../logger';
 import * as fs from 'fs';
 
 /**
@@ -34,14 +34,15 @@ export const app_config = {
 export type ConfigType = typeof app_config;
 export const loadConfig = (configPath: string = null): ConfigType => {
   let loadedConfig = null;
+  const logger = new Logger();
   try {
     loadedConfig = JSON.parse(
       fs.readFileSync(configPath ?? defaultConfigPath, 'utf-8'),
     );
-    poolLogger.info('Config loaded successfully');
+    logger.info('Config loaded successfully');
   } catch {
     // If error while loading configs, use default configs
-    poolLogger.warn('Fail to load configs. Use default configs');
+    logger.warn('Fail to load configs. Use default configs');
     return app_config;
   }
   // Session Pool Config

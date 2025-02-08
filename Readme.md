@@ -49,10 +49,17 @@ After that you can use dispatcher to control pool manager.
       - number
     - contextMode: ContextMode
       - Required
-      - ContextMode.ISOLATED | ContextMode.SHARED
+        - `ContextMode.ISOLATED` | `ContextMode.SHARED`
+    - enableLog: boolean
+      - Optional
+      - Default: `true`
+    - logLevel: LogLevel
+      - Optional
+      - Default: `LogLevel.DEBUG`
     - options
       - Optional
       - [puppeteer.LaunchOptions](https://pptr.dev/api/puppeteer.launchoptions)
+      - Default: `{}`
     - customConfigPath
       - Optional
       - string (Default: `puppeteer-pool-config.json` in project root)

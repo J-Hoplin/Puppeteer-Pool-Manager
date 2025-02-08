@@ -16,11 +16,7 @@
   ],
   "dependencies": {
     "pidusage": "^3.0.2",
-    "pino": "^9.3.2",
-    "pino-pretty": "^11.2.2",
-    "reflect-metadata": "^0.2.2",
-    "@types/pino": "^7.0.5",
-    "@types/pino-pretty": "^5.0.0"
+    "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {
     "puppeteer": "^24.1.1"
