@@ -20,24 +20,54 @@
   ```
   pnpm install puppeteer @hoplin/puppeteer-pool
   ```
-  <details>
-  <summary><b>Patch Note</b></summary>
-  <div markdown="1">
 
-### Release 2.0.8
+## Release 2.0.8(and it's sub versions)
+
+- `PuppeteerPool.start` required parameter as config type
+
+  ```typescript
+  type PuppeteerPoolStartOptions = {
+    /**
+     * Number of concurrency,
+     * Default is 3
+     */
+    concurrencyLevel: number;
+    /**
+     * Context mode
+     * Default is ContextMode.SHARED
+     */
+    contextMode: ContextMode;
+    /**
+     * Puppeteer launch options
+     * Default is {}
+     */
+    options?: puppeteer.LaunchOptions;
+    /**
+     * Custom config path
+     */
+    customConfigPath?: string;
+    /**
+     * Enable log
+     * Default is true
+     */
+    enableLog?: boolean;
+    /**
+     * Log level
+     * Default is LogLevel.DEBUG
+     */
+    logLevel?: LogLevel;
+  };
+  ```
 
 - Remove pino logger dependency and implement custom logger
   - You can config `log level` and `enable log` in `PuppeteerPool.start` function
 - Enhanced Concurrency Control
 
-### Next Features in 2.0.9
+## Next Features in 2.0.9
 
 - Detailed Metrics Monitoring
   - Monitor metrics by context
 - Support to use Playwright instead of Puppeteer
-
-</div>
-</details>
 
 ## Fully changed from 2.0.0
 
@@ -58,32 +88,50 @@ After that you can use dispatcher to control pool manager.
 - PuppeteePool
   - `PuppeteerPool` is singleton class. You can use `PuppeteerPool.start` to initialize pool manager.
 - PuppeteerPool.start
+
   - Static Method
   - Description: Initialize pool manager. You need to call this function to start puppeteer pool. Even if you invoke
     this function multiple times with differenct arguments, it will return the first initialized instance.
-  - Args
-    - concurrencyLevel
-      - Required
-      - number
-    - contextMode: ContextMode
-      - Required
-        - `ContextMode.ISOLATED` | `ContextMode.SHARED`
-    - enableLog: boolean
-      - Optional
-      - Default: `true`
-    - logLevel: LogLevel
-      - Optional
-      - Default: `LogLevel.DEBUG`
-    - options
-      - Optional
-      - [puppeteer.LaunchOptions](https://pptr.dev/api/puppeteer.launchoptions)
-      - Default: `{}`
-    - customConfigPath
-      - Optional
-      - string (Default: `puppeteer-pool-config.json` in project root)
+  - Args: `PuppeteerPoolStartOptions`
+
+    ```typescript
+    type PuppeteerPoolStartOptions = {
+      /**
+       * Number of concurrency,
+       * Default is 3
+       */
+      concurrencyLevel: number;
+      /**
+       * Context mode
+       * Default is ContextMode.SHARED
+       */
+      contextMode: ContextMode;
+      /**
+       * Puppeteer launch options
+       * Default is {}
+       */
+      options?: puppeteer.LaunchOptions;
+      /**
+       * Custom config path
+       */
+      customConfigPath?: string;
+      /**
+       * Enable log
+       * Default is true
+       */
+      enableLog?: boolean;
+      /**
+       * Log level
+       * Default is LogLevel.DEBUG
+       */
+      logLevel?: LogLevel;
+    };
+    ```
+
   - Return
     - `Promise<PuppeteerPool>`
     - Returns PuppeteerPool Instance.
+
 - Instance<PuppeteerPool>.stop
   - Description: Stop pool manager. It will close all sessions and terminate pool manager.
   - Return
@@ -114,7 +162,10 @@ After that you can use dispatcher to control pool manager.
 import { ContextMode, PuppeteerPool } from '@hoplin/puppeteer-pool';
 
 async function main() {
-  const poolInstance = await PuppeteerPool.start(2, ContextMode.ISOLATED);
+  const poolInstance = await PuppeteerPool.start({
+    concurrencyLevel: 2,
+    contextMode: ContextMode.ISOLATED,
+  });
 
   const urls = [
     'https://www.google.com',

@@ -8,6 +8,33 @@ import { RequestedTask } from '../types';
 import * as puppeteer from 'puppeteer';
 import { LogLevel } from '../logger';
 
+export type PuppeteerPoolStartOptions = {
+  /**
+   * Number of concurrency
+   */
+  concurrencyLevel: number;
+  /**
+   * Context mode
+   */
+  contextMode: ContextMode;
+  /**
+   * Puppeteer launch options
+   */
+  options?: puppeteer.LaunchOptions;
+  /**
+   * Custom config path
+   */
+  customConfigPath?: string;
+  /**
+   * Enable log
+   */
+  enableLog?: boolean;
+  /**
+   * Log level
+   */
+  logLevel?: LogLevel;
+};
+
 export class PuppeteerPool {
   private static isInitialized = false;
   private static dispatcherInstance: TaskDispatcher;
@@ -31,24 +58,26 @@ export class PuppeteerPool {
   /**
    * Invoke this function to start a new Puppeteer Pool
    */
-  public static async start(
-    concurrencyLevel: number,
-    contextMode: ContextMode,
-    enableLog: boolean = true,
-    logLevel: LogLevel = LogLevel.DEBUG,
-    options?: puppeteer.LaunchOptions,
-    customConfigPath?: string,
-  ) {
+  public static async start(options: PuppeteerPoolStartOptions) {
+    const startOptions: PuppeteerPoolStartOptions = {
+      concurrencyLevel: 3,
+      contextMode: ContextMode.SHARED,
+      options: {},
+      enableLog: true,
+      logLevel: LogLevel.DEBUG,
+      ...options,
+    };
+
     if (!PuppeteerPool.isInitialized) {
       // Initialize Task Dispatcher
       PuppeteerPool.dispatcherInstance = new TaskDispatcher();
       await PuppeteerPool.dispatcherInstance.init(
-        concurrencyLevel,
-        contextMode,
-        enableLog,
-        logLevel,
-        options,
-        customConfigPath,
+        startOptions.concurrencyLevel,
+        startOptions.contextMode,
+        startOptions.enableLog,
+        startOptions.logLevel,
+        startOptions.options,
+        startOptions.customConfigPath,
       );
       // Initialize REST Client Instance
       PuppeteerPool.instance = new PuppeteerPool();
