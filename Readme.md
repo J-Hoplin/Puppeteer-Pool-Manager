@@ -20,9 +20,9 @@
   ```
   pnpm install puppeteer @hoplin/puppeteer-pool
   ```
-<details>
-<summary><b>Patch Note</b></summary>
-<div markdown="1">
+  <details>
+  <summary><b>Patch Note</b></summary>
+  <div markdown="1">
 
 ### Release 2.0.8
 
