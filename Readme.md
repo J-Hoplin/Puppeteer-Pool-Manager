@@ -21,6 +21,12 @@
   pnpm install puppeteer @hoplin/puppeteer-pool
   ```
 
+## Next Features
+
+- Detailed Metrics Monitoring
+  - Monitor metrics by context
+- Support to use Playwright instead of Puppeteer
+
 ## Fully changed from 2.0.0
 
 The internal implementation is event-based, which significantly improves the stability. In addition, instead of relying
