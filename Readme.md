@@ -22,7 +22,9 @@
   ```
 
 ## Release 2.0.8(and it's sub versions)
+
 - `PuppeteerPool.start` required parameter as config type
+
   ```typescript
   type PuppeteerPoolStartOptions = {
     /**
@@ -86,47 +88,50 @@ After that you can use dispatcher to control pool manager.
 - PuppeteePool
   - `PuppeteerPool` is singleton class. You can use `PuppeteerPool.start` to initialize pool manager.
 - PuppeteerPool.start
+
   - Static Method
   - Description: Initialize pool manager. You need to call this function to start puppeteer pool. Even if you invoke
     this function multiple times with differenct arguments, it will return the first initialized instance.
   - Args: `PuppeteerPoolStartOptions`
-  
+
     ```typescript
-      type PuppeteerPoolStartOptions = {
-        /**
-         * Number of concurrency,
-         * Default is 3
-         */
-        concurrencyLevel: number;
-        /**
-         * Context mode
-         * Default is ContextMode.SHARED
-         */
-        contextMode: ContextMode;
-        /**
-         * Puppeteer launch options
-         * Default is {}
-         */
-        options?: puppeteer.LaunchOptions;
-        /**
-         * Custom config path
-         */
-        customConfigPath?: string;
-        /**
-         * Enable log
-         * Default is true
-         */
-        enableLog?: boolean;
-        /**
-         * Log level
-         * Default is LogLevel.DEBUG
-         */
-        logLevel?: LogLevel;
-      };
-      ```
+    type PuppeteerPoolStartOptions = {
+      /**
+       * Number of concurrency,
+       * Default is 3
+       */
+      concurrencyLevel: number;
+      /**
+       * Context mode
+       * Default is ContextMode.SHARED
+       */
+      contextMode: ContextMode;
+      /**
+       * Puppeteer launch options
+       * Default is {}
+       */
+      options?: puppeteer.LaunchOptions;
+      /**
+       * Custom config path
+       */
+      customConfigPath?: string;
+      /**
+       * Enable log
+       * Default is true
+       */
+      enableLog?: boolean;
+      /**
+       * Log level
+       * Default is LogLevel.DEBUG
+       */
+      logLevel?: LogLevel;
+    };
+    ```
+
   - Return
     - `Promise<PuppeteerPool>`
     - Returns PuppeteerPool Instance.
+
 - Instance<PuppeteerPool>.stop
   - Description: Stop pool manager. It will close all sessions and terminate pool manager.
   - Return
