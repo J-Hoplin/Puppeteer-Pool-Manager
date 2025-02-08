@@ -62,19 +62,42 @@ export class TaskDispatcher extends EventEmitter {
   constructor() {
     super();
     this.on(this.runTaskEvent, async () => {
-      if (!this.browser) {
+      if (!this.browser || this.isRestarting) {
         return;
       }
-      if (this.taskQueue.isEmpty || this.idleContextQueue.isEmpty) {
+
+      const batchCount = Math.min(
+        this.taskQueue.size,
+        this.idleContextQueue.size,
+      );
+      if (batchCount === 0) {
         return;
       }
-      const context = this.idleContextQueue.dequeue();
-      const task = this.taskQueue.dequeue();
-      await this.executeTask(
-        context.id,
-        context.element,
-        task.id,
-        task.element,
+      const batchTasks: {
+        contextId: string;
+        context: TaskContext;
+        taskId: string;
+        task: RequestedTask;
+      }[] = [];
+      for (let i = 0; i < batchCount; i++) {
+        const context = this.idleContextQueue.dequeue();
+        const task = this.taskQueue.dequeue();
+        batchTasks.push({
+          contextId: context.id,
+          context: context.element,
+          taskId: task.id,
+          task: task.element,
+        });
+      }
+      await Promise.all(
+        batchTasks.map((task) =>
+          this.executeTask(
+            task.contextId,
+            task.context,
+            task.taskId,
+            task.task,
+          ),
+        ),
       );
     });
   }
@@ -239,11 +262,7 @@ export class TaskDispatcher extends EventEmitter {
     } finally {
       // Change State to Restart
       this.isRestarting = false;
-      // Run task as much as possible after restart. Task can be pending during restart.
-      const maxTask = Math.min(this.taskQueue.size, this.idleContextQueue.size);
-      for (let i = 0; i < maxTask; i++) {
-        this.emit(this.runTaskEvent);
-      }
+      this.emit(this.runTaskEvent);
     }
   }
 
