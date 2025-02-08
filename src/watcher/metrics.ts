@@ -1,15 +1,22 @@
+import { Logger, LogLevel } from '../logger';
 import { execSync } from 'child_process';
-import { poolLogger } from '../logger';
 import pidusage from 'pidusage';
 import os from 'os';
 
 export class MetricsWatcher {
   private intervalId: NodeJS.Timeout;
+  private logger: Logger;
   /**
    * Check PID
    *
    */
-  constructor(private readonly pid: number) {}
+  constructor(
+    private readonly pid: number,
+    enableLog: boolean,
+    logLevel: LogLevel,
+  ) {
+    this.logger = new Logger(enableLog, logLevel);
+  }
 
   public startThresholdWatcher(
     limit: { cpu: number; memory: number },
@@ -26,7 +33,7 @@ export class MetricsWatcher {
         metrics.cpuUsage > limit.cpu ||
         metrics.memoryUsageValue > limit.memory
       ) {
-        poolLogger.warn(
+        this.logger.warn(
           `Over threshold: CPU: ${metrics.cpuUsage.toFixed(2)}% Memory: ${metrics.memoryUsageValue.toFixed(2)}MB`,
         );
         await cbOverThreshold();

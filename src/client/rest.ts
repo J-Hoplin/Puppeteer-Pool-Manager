@@ -6,6 +6,7 @@ import { TaskDispatcher } from '../pool/dispatcher';
 import { ContextMode } from '../pool/enum';
 import { RequestedTask } from '../types';
 import * as puppeteer from 'puppeteer';
+import { LogLevel } from '../logger';
 
 export class PuppeteerPool {
   private static isInitialized = false;
@@ -33,6 +34,8 @@ export class PuppeteerPool {
   public static async start(
     concurrencyLevel: number,
     contextMode: ContextMode,
+    enableLog: boolean = true,
+    logLevel: LogLevel = LogLevel.DEBUG,
     options?: puppeteer.LaunchOptions,
     customConfigPath?: string,
   ) {
@@ -42,6 +45,8 @@ export class PuppeteerPool {
       await PuppeteerPool.dispatcherInstance.init(
         concurrencyLevel,
         contextMode,
+        enableLog,
+        logLevel,
         options,
         customConfigPath,
       );

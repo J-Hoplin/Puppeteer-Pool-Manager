@@ -4,10 +4,10 @@ import { PoolNotInitializedException } from '../error/pool';
 import { MetricsWatcher } from '../watcher/metrics';
 import { ConfigType, loadConfig } from '../configs';
 import { ContextMode, EventTags } from './enum';
+import { Logger, LogLevel } from '../logger';
 import { EventEmitter } from 'node:events';
 import { Queue } from '../queue/queue';
 import * as puppeteer from 'puppeteer';
-import { poolLogger } from '../logger';
 
 const DEFAULT_VALUES = {
   CONCURRENCY_LEVEL: 1,
@@ -45,9 +45,14 @@ export class TaskDispatcher extends EventEmitter {
   private isRestarting: boolean = false;
   private concurrencyLevel: number = DEFAULT_VALUES.CONCURRENCY_LEVEL;
   private contextMode: ContextMode = DEFAULT_VALUES.CONTEXT_MODE;
+  private enableLog: boolean;
+  private logLevel: LogLevel;
   private launchOptions: puppeteer.LaunchOptions = {};
   private poolConfig: ConfigType;
   private threshold: { cpu: number; memory: number } = DEFAULT_VALUES.THRESHOLD;
+
+  // Logger
+  private logger: Logger = new Logger();
 
   private taskEvents: Map<string, EventEmitter> = new Map<
     string,
@@ -57,19 +62,42 @@ export class TaskDispatcher extends EventEmitter {
   constructor() {
     super();
     this.on(this.runTaskEvent, async () => {
-      if (!this.browser) {
+      if (!this.browser || this.isRestarting) {
         return;
       }
-      if (this.taskQueue.isEmpty || this.idleContextQueue.isEmpty) {
+
+      const batchCount = Math.min(
+        this.taskQueue.size,
+        this.idleContextQueue.size,
+      );
+      if (batchCount === 0) {
         return;
       }
-      const context = this.idleContextQueue.dequeue();
-      const task = this.taskQueue.dequeue();
-      await this.executeTask(
-        context.id,
-        context.element,
-        task.id,
-        task.element,
+      const batchTasks: {
+        contextId: string;
+        context: TaskContext;
+        taskId: string;
+        task: RequestedTask;
+      }[] = [];
+      for (let i = 0; i < batchCount; i++) {
+        const context = this.idleContextQueue.dequeue();
+        const task = this.taskQueue.dequeue();
+        batchTasks.push({
+          contextId: context.id,
+          context: context.element,
+          taskId: task.id,
+          task: task.element,
+        });
+      }
+      await Promise.all(
+        batchTasks.map((task) =>
+          this.executeTask(
+            task.contextId,
+            task.context,
+            task.taskId,
+            task.task,
+          ),
+        ),
       );
     });
   }
@@ -77,14 +105,22 @@ export class TaskDispatcher extends EventEmitter {
   async init(
     concurrencyLevel: number = DEFAULT_VALUES.CONCURRENCY_LEVEL,
     contextMode: ContextMode = DEFAULT_VALUES.CONTEXT_MODE,
+    enableLog: boolean = true,
+    logLevel: LogLevel = LogLevel.DEBUG,
     options: puppeteer.LaunchOptions = {},
     customPoolConfigPath?: string,
   ) {
+    // Logger setting
+    this.enableLog = enableLog;
+    this.logLevel = logLevel;
+    this.logger.setEnabled(enableLog);
+    this.logger.setLogLevel(logLevel);
     // Read Config
     this.poolConfig = loadConfig(customPoolConfigPath);
-    poolLogger.info('Initializing Task Dispatcher');
+    this.logger.info('Initializing Task Dispatcher');
     // Set instance variables
     this.concurrencyLevel = concurrencyLevel;
+    // Context Mode and Puppeteer launch options
     this.contextMode = contextMode;
     this.launchOptions = options;
     // Initialize Main Browser
@@ -113,10 +149,14 @@ export class TaskDispatcher extends EventEmitter {
         await instance.init();
         id = this.idleContextQueue.enqueue(instance);
       }
-      poolLogger.info(`Context initialized - ID: ${id}`);
+      this.logger.info(`Context initialized - ID: ${id}`);
     }
     // Start Metrics Watcher
-    this.metricsWatcher = new MetricsWatcher(this.browser.process().pid);
+    this.metricsWatcher = new MetricsWatcher(
+      this.browser.process().pid,
+      this.enableLog,
+      this.logLevel,
+    );
     if (this.poolConfig.threshold.activate) {
       this.threshold = {
         cpu: this.poolConfig.threshold.cpu,
@@ -143,7 +183,7 @@ export class TaskDispatcher extends EventEmitter {
       throw new PoolNotInitializedException();
     }
     if (this.isRestarting) {
-      poolLogger.info('Restart already in progress, skipping...');
+      this.logger.info('Restart already in progress, skipping...');
       return;
     }
 
@@ -151,7 +191,7 @@ export class TaskDispatcher extends EventEmitter {
     try {
       const contextMode = this.contextMode;
       const concurrencyLevel = this.concurrencyLevel;
-      poolLogger.info(
+      this.logger.info(
         `Waiting for running tasks to complete... ${this.runningContextQueue.size} task`,
       );
       // Pending until all of the running tasks are completed
@@ -195,9 +235,13 @@ export class TaskDispatcher extends EventEmitter {
           await instance.init();
           id = this.idleContextQueue.enqueue(instance);
         }
-        poolLogger.info(`Context initialized - ID: ${id}`);
+        this.logger.info(`Context initialized - ID: ${id}`);
       }
-      this.metricsWatcher = new MetricsWatcher(this.browser.process().pid);
+      this.metricsWatcher = new MetricsWatcher(
+        this.browser.process().pid,
+        this.enableLog,
+        this.logLevel,
+      );
       if (this.poolConfig.threshold.activate) {
         this.threshold = {
           cpu: this.poolConfig.threshold.cpu,
@@ -211,18 +255,14 @@ export class TaskDispatcher extends EventEmitter {
           this.poolConfig.threshold.interval,
         );
       }
-      poolLogger.info('Restart Completed!');
+      this.logger.info('Restart Completed!');
     } catch (error) {
-      poolLogger.error('Fail to restart:', error);
+      this.logger.error('Fail to restart:', error);
       throw error;
     } finally {
       // Change State to Restart
       this.isRestarting = false;
-      // Run task as much as possible after restart. Task can be pending during restart.
-      const maxTask = Math.min(this.taskQueue.size, this.idleContextQueue.size);
-      for (let i = 0; i < maxTask; i++) {
-        this.emit(this.runTaskEvent);
-      }
+      this.emit(this.runTaskEvent);
     }
   }
 
@@ -270,7 +310,7 @@ export class TaskDispatcher extends EventEmitter {
     taskEvent.emit(EventTags.RUNNING);
     // Recover context if non-responsive
     if (!(await context.checkContextResponsive())) {
-      poolLogger.info(`Fixing context due to non-responsive`);
+      this.logger.info(`Fixing context due to non-responsive`);
       await context.fix();
     }
     const result = await context.runTask(task);
