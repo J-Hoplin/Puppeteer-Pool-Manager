@@ -20,12 +20,24 @@
   ```
   pnpm install puppeteer @hoplin/puppeteer-pool
   ```
+<details>
+<summary><b>Patch Note</b></summary>
+<div markdown="1">
 
-## Next Features
+### Release 2.0.8
+
+- Remove pino logger dependency and implement custom logger
+  - You can config `log level` and `enable log` in `PuppeteerPool.start` function
+- Enhanced Concurrency Control
+
+### Next Features in 2.0.9
 
 - Detailed Metrics Monitoring
   - Monitor metrics by context
 - Support to use Playwright instead of Puppeteer
+
+</div>
+</details>
 
 ## Fully changed from 2.0.0
 
