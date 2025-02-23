@@ -1,9 +1,11 @@
+import chalk from 'chalk';
+
 interface Colors {
-  reset: string;
-  red: string;
-  yellow: string;
-  blue: string;
-  green: string;
+  reset: (text: string) => string;
+  red: (text: string) => string;
+  yellow: (text: string) => string;
+  blue: (text: string) => string;
+  green: (text: string) => string;
 }
 
 interface LogMetadata {
@@ -25,15 +27,16 @@ export class Logger {
   constructor(
     private enabled: boolean = true,
     private logLevel: LogLevel = LogLevel.DEBUG,
-  ) {}
+  ) {
+    chalk.level = 3;
+  }
 
   private readonly colors: Colors = {
-    // Should reset ANSI color after using color: https://gist.github.com/pinksynth/209937bd424edb2bd21f7c8bf756befd
-    reset: '\x1b[0m',
-    red: '\x1b[31m',
-    yellow: '\x1b[33m',
-    blue: '\x1b[34m',
-    green: '\x1b[32m',
+    reset: chalk.reset,
+    red: chalk.red,
+    yellow: chalk.yellow,
+    blue: chalk.blue,
+    green: chalk.green,
   };
 
   private getTimestamp(): string {
@@ -46,6 +49,7 @@ export class Logger {
     const seconds = String(date.getSeconds()).padStart(2, '0');
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
   }
+
   private formatLog(
     level: string,
     color: keyof Colors,
@@ -59,7 +63,7 @@ export class Logger {
       message: message.join(' '),
       ...extraMetadata,
     };
-    return `[${metadata.timestamp}] ${this.colors[color]}[${level}]${this.colors.reset} (${metadata.pid}) -- ${metadata.message}`;
+    return `[${metadata.timestamp}] ${this.colors[color](`[${level}]`)} (${metadata.pid}) -- ${metadata.message}`;
   }
 
   private log(

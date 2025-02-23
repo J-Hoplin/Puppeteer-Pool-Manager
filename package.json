@@ -1,6 +1,6 @@
 {
   "name": "@hoplin/puppeteer-pool",
-  "version": "2.0.8-beta",
+  "version": "2.0.9",
   "main": "dist/index.js",
   "description": "Puppeteer Pool Manager for worker server, process daemon, commands etc...",
   "repository": "https://github.com/J-Hoplin/Puppeteer-Pool.git",
@@ -15,6 +15,7 @@
     "hoplin"
   ],
   "dependencies": {
+    "chalk": "4",
     "pidusage": "^3.0.2",
     "reflect-metadata": "^0.2.2"
   },
