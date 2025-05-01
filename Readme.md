@@ -21,10 +21,10 @@
   pnpm install puppeteer @hoplin/puppeteer-pool
   ```
 
-## Release 2.10.0
+## Release 2.1.0
 
 - Garbage collection is executed at the end of each context task
-- Client's method are now all 'static'. You don't need to create instance of client and need migration if you are using previous version(< 2.10.0).
+- Client's method are now all 'static'. You don't need to create instance of client and need migration if you are using previous version(`< 2.1.0`).
   - `getPoolMetrics`
   - `runTask`
   - `stop`
