@@ -2,13 +2,12 @@ import { IsolateContext, SharedContext, TaskContext } from './context';
 import { RequestedTask, RunTaskResponse } from '../types/type';
 import { PoolNotInitializedException } from '../error/pool';
 import { ContextMode, EventTags, QueueMode } from './enum';
+import { IQueue, PriorityQueue, Queue } from '../queue';
 import { MetricsWatcher } from '../watcher/metrics';
 import { ConfigType, loadConfig } from '../configs';
 import { PuppeteerLaunchOptions } from 'puppeteer';
-import { IQueue, PriorityQueue } from '../queue';
 import { Logger, LogLevel } from '../logger';
 import { EventEmitter } from 'node:events';
-import { Queue } from '../queue/queue';
 import * as puppeteer from 'puppeteer';
 
 const DEFAULT_VALUES = {
