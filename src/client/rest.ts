@@ -2,8 +2,8 @@
  * APIs for RESTful API mode
  */
 import { PoolNotInitializedException } from '../error';
+import { ContextMode, QueueMode } from '../pool/enum';
 import { TaskDispatcher } from '../pool/dispatcher';
-import { ContextMode } from '../pool/enum';
 import { RequestedTask } from '../types';
 import * as puppeteer from 'puppeteer';
 import { LogLevel } from '../logger';
@@ -12,11 +12,15 @@ export type PuppeteerPoolStartOptions = {
   /**
    * Number of concurrency
    */
-  concurrencyLevel: number;
+  concurrencyLevel?: number;
+  /**
+   * Task queue type
+   */
+  taskQueueType?: QueueMode;
   /**
    * Context mode
    */
-  contextMode: ContextMode;
+  contextMode?: ContextMode;
   /**
    * Puppeteer launch options
    */
@@ -44,7 +48,7 @@ export class PuppeteerPool {
    * Check if the instance is initialized
    * Throw an error if the instance is not initialized
    */
-  private checkInstanceInitalized() {
+  private static checkInstanceInitalized() {
     if (!PuppeteerPool.isInitialized) {
       throw new PoolNotInitializedException();
     }
@@ -64,6 +68,7 @@ export class PuppeteerPool {
       contextMode: ContextMode.SHARED,
       options: {},
       enableLog: true,
+      taskQueueType: QueueMode.PRIORITY,
       logLevel: LogLevel.DEBUG,
       ...options,
     };
@@ -73,6 +78,7 @@ export class PuppeteerPool {
       PuppeteerPool.dispatcherInstance = new TaskDispatcher();
       await PuppeteerPool.dispatcherInstance.init(
         startOptions.concurrencyLevel,
+        startOptions.taskQueueType,
         startOptions.contextMode,
         startOptions.enableLog,
         startOptions.logLevel,
@@ -92,23 +98,25 @@ export class PuppeteerPool {
    *
    * Please enroll this function in your graceful shutdown process
    */
-  public async stop() {
+  public static async stop() {
     this.checkInstanceInitalized();
     await PuppeteerPool.dispatcherInstance.close();
   }
 
   /**
    * Invoke this function to run a task
+   *
+   * priorty option is only available in priority queue mode and will be ignored in default queue mode
    */
-  public async runTask<T>(task: RequestedTask<T>) {
+  public static async runTask<T>(task: RequestedTask<T>, priority: number = 1) {
     this.checkInstanceInitalized();
-    return await PuppeteerPool.dispatcherInstance.dispatchTask(task);
+    return await PuppeteerPool.dispatcherInstance.dispatchTask(task, priority);
   }
 
   /**
    * Invoke this function to get pool metrics
    */
-  public async getPoolMetrics() {
+  public static async getPoolMetrics() {
     this.checkInstanceInitalized();
     return await PuppeteerPool.dispatcherInstance.getPoolMetrics();
   }

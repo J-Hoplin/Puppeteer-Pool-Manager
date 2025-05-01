@@ -1,9 +1,11 @@
 import { IsolateContext, SharedContext, TaskContext } from './context';
 import { RequestedTask, RunTaskResponse } from '../types/type';
 import { PoolNotInitializedException } from '../error/pool';
+import { ContextMode, EventTags, QueueMode } from './enum';
 import { MetricsWatcher } from '../watcher/metrics';
 import { ConfigType, loadConfig } from '../configs';
-import { ContextMode, EventTags } from './enum';
+import { PuppeteerLaunchOptions } from 'puppeteer';
+import { IQueue, PriorityQueue } from '../queue';
 import { Logger, LogLevel } from '../logger';
 import { EventEmitter } from 'node:events';
 import { Queue } from '../queue/queue';
@@ -25,11 +27,11 @@ const INTERNAL_EVENTS = {
 
 export class TaskDispatcher extends EventEmitter {
   // Task Queue
-  private taskQueue: Queue<RequestedTask> = new Queue<RequestedTask>();
+  private taskQueue: IQueue<RequestedTask>;
 
   // Context Queue
-  private idleContextQueue: Queue<TaskContext> = new Queue<TaskContext>();
-  private runningContextQueue: Queue<TaskContext> = new Queue<TaskContext>();
+  private idleContextQueue: IQueue<TaskContext> = new Queue<TaskContext>();
+  private runningContextQueue: IQueue<TaskContext> = new Queue<TaskContext>();
 
   // Browser Instance
   private browser: puppeteer.Browser;
@@ -47,7 +49,7 @@ export class TaskDispatcher extends EventEmitter {
   private contextMode: ContextMode = DEFAULT_VALUES.CONTEXT_MODE;
   private enableLog: boolean;
   private logLevel: LogLevel;
-  private launchOptions: puppeteer.LaunchOptions = {};
+  private launchOptions: PuppeteerLaunchOptions = {};
   private poolConfig: ConfigType;
   private threshold: { cpu: number; memory: number } = DEFAULT_VALUES.THRESHOLD;
 
@@ -82,6 +84,9 @@ export class TaskDispatcher extends EventEmitter {
       for (let i = 0; i < batchCount; i++) {
         const context = this.idleContextQueue.dequeue();
         const task = this.taskQueue.dequeue();
+        if (!task) {
+          continue;
+        }
         batchTasks.push({
           contextId: context.id,
           context: context.element,
@@ -104,12 +109,15 @@ export class TaskDispatcher extends EventEmitter {
 
   async init(
     concurrencyLevel: number = DEFAULT_VALUES.CONCURRENCY_LEVEL,
+    taskQueueType: QueueMode = QueueMode.DEFAULT,
     contextMode: ContextMode = DEFAULT_VALUES.CONTEXT_MODE,
     enableLog: boolean = true,
     logLevel: LogLevel = LogLevel.DEBUG,
-    options: puppeteer.LaunchOptions = {},
+    options: PuppeteerLaunchOptions = {},
     customPoolConfigPath?: string,
   ) {
+    this.taskQueue =
+      taskQueueType === QueueMode.DEFAULT ? new Queue() : new PriorityQueue();
     // Logger setting
     this.enableLog = enableLog;
     this.logLevel = logLevel;
@@ -131,6 +139,7 @@ export class TaskDispatcher extends EventEmitter {
         height: this.poolConfig.session_pool.height,
       },
     });
+
     // Initialize contexts
     for (let i = 0; i < concurrencyLevel; i++) {
       let id;
@@ -140,14 +149,14 @@ export class TaskDispatcher extends EventEmitter {
           this.poolConfig.context.timeout,
         );
         await instance.init();
-        id = this.idleContextQueue.enqueue(instance);
+        id = this.idleContextQueue.enqueue({ element: instance });
       } else {
         const instance = new IsolateContext(
           this.browser,
           this.poolConfig.context.timeout,
         );
         await instance.init();
-        id = this.idleContextQueue.enqueue(instance);
+        id = this.idleContextQueue.enqueue({ element: instance });
       }
       this.logger.info(`Context initialized - ID: ${id}`);
     }
@@ -226,14 +235,18 @@ export class TaskDispatcher extends EventEmitter {
             this.poolConfig.context.timeout,
           );
           await instance.init();
-          id = this.idleContextQueue.enqueue(instance);
+          id = this.idleContextQueue.enqueue({
+            element: instance,
+          });
         } else {
           const instance = new IsolateContext(
             this.browser,
             this.poolConfig.context.timeout,
           );
           await instance.init();
-          id = this.idleContextQueue.enqueue(instance);
+          id = this.idleContextQueue.enqueue({
+            element: instance,
+          });
         }
         this.logger.info(`Context initialized - ID: ${id}`);
       }
@@ -266,12 +279,18 @@ export class TaskDispatcher extends EventEmitter {
     }
   }
 
-  async dispatchTask<T>(task: RequestedTask<T>): Promise<RunTaskResponse<T>> {
+  async dispatchTask<T>(
+    task: RequestedTask<T>,
+    priority?: number,
+  ): Promise<RunTaskResponse<T>> {
     if (!this.isInitialized) {
       throw new PoolNotInitializedException();
     }
     const event = new EventEmitter();
-    const taskId = this.taskQueue.enqueue(task);
+    const taskId = this.taskQueue.enqueue({
+      element: task,
+      priority: priority,
+    });
     this.taskEvents.set(taskId, event);
     const resultListener: Promise<RunTaskResponse<T>> = new Promise(
       (resolve) => {
@@ -305,7 +324,10 @@ export class TaskDispatcher extends EventEmitter {
     if (!this.isInitialized) {
       throw new PoolNotInitializedException();
     }
-    this.runningContextQueue.enqueue(context, contextId);
+    this.runningContextQueue.enqueue({
+      element: context,
+      id: contextId,
+    });
     const taskEvent = this.taskEvents.get(taskId);
     taskEvent.emit(EventTags.RUNNING);
     // Recover context if non-responsive
@@ -319,7 +341,9 @@ export class TaskDispatcher extends EventEmitter {
     this.taskEvents.delete(taskId);
     // Remove context from running queue and return to idle queue
     this.runningContextQueue.remove(contextId);
-    this.idleContextQueue.enqueue(context);
+    this.idleContextQueue.enqueue({
+      element: context,
+    });
     // Emit next task if pending task exist
     if (!this.taskQueue.isEmpty) {
       this.emit(this.runTaskEvent);

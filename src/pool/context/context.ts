@@ -44,6 +44,9 @@ export abstract class TaskContext {
       }
       const devToolSession = await this.page.createCDPSession();
       await this.page.goto('about:blank');
+      // https://chromedevtools.github.io/devtools-protocol/tot/HeapProfiler/#method-collectGarbage
+      await devToolSession.send('HeapProfiler.enable');
+      await devToolSession.send('HeapProfiler.collectGarbage');
       await devToolSession.send('Network.clearBrowserCache');
       await devToolSession.send('Network.clearBrowserCookies');
     }
