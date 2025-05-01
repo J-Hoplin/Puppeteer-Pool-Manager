@@ -1,4 +1,4 @@
-import { PriorityQueue } from '../queue.priority';
+import { PriorityQueue } from '../src/queue/queue.priority';
 
 describe('PriorityQueue function test', () => {
   let queue: PriorityQueue<number>;

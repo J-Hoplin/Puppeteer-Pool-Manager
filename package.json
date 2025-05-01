@@ -59,7 +59,7 @@
       "eslint --fix",
       "prettier --write"
     ],
-    "src/**/*.spec.ts": [
+    "tests/**/*.spec.ts": [
       "npm test"
     ]
   }
