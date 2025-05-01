@@ -55,11 +55,11 @@
     "test:coverage": "jest --coverage"
   },
   "lint-staged": {
-    "lib/**/*.ts": [
+    "src/**/*.ts": [
       "eslint --fix",
       "prettier --write"
     ],
-    "tests/**/*.spec.ts": [
+    "src/**/*.spec.ts": [
       "npm test"
     ]
   }
