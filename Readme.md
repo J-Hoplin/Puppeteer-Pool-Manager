@@ -57,7 +57,6 @@
       }, priority);
       ```
 
-
 **[ Client API ]**
 
 - PuppeteePool
@@ -116,12 +115,12 @@
   - Static Method
   - Description: Run task in pool manager. It will return result of task.
   - Args
-   - task
-     - Required
-     - Function
+  - task
+    - Required
+    - Function
   - Return
-   - `Promise<any>`
-   - Returns result of task(Same return type with task callback return type)
+  - `Promise<any>`
+  - Returns result of task(Same return type with task callback return type)
 - PuppeteerPool.getPoolMetrics
   - Static Method
   - Description: Get pool metrics. It will return metrics of pool manager.
