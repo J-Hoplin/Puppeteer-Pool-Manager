@@ -135,35 +135,53 @@
 
 ## Simple Demo
 
+
 ```typescript
-import { ContextMode, PuppeteerPool } from '@hoplin/puppeteer-pool';
+import { ContextMode, PuppeteerPool, QueueMode } from '@hoplin/puppeteer-pool';
 
 async function main() {
-  const poolInstance = await PuppeteerPool.start({
-    concurrencyLevel: 2,
+  await PuppeteerPool.start({
+    concurrencyLevel: 6,
     contextMode: ContextMode.ISOLATED,
+    customConfigPath: `./puppeteer-pool-config.json`,
+    taskQueueType: QueueMode.PRIORITY,
   });
 
-  const urls = [
+  const baseUrls = [
     'https://www.google.com',
     'https://www.bing.com',
     'https://github.com',
+    'https://www.naver.com',
+    'https://www.daum.net',
+    'https://www.youtube.com',
+    'https://www.amazon.com',
+    'https://www.netflix.com',
   ];
 
-  console.log(await poolInstance.getPoolMetrics());
+  const urls = Array.from({ length: 50 }, (_, index) => {
+    const baseUrl = baseUrls[index % baseUrls.length];
+    const priority = Math.floor(Math.random() * 10) + 1;
+    return { url: baseUrl, priority: priority };
+  });
 
-  const promises = urls.map((url) =>
-    poolInstance.runTask(async (page) => {
+  const promises = urls.map(({ url, priority }) => {
+    console.log(`Enqueue task: ${url}`);
+    return PuppeteerPool.runTask(async (page) => {
+      console.log(`Process task for ${url} with priority ${priority}`);
       await page.goto(url);
-      return await page.title();
-    }),
-  );
+      const title = await page.title();
+      return title;
+    }, priority);
+  });
 
   const titles = await Promise.all(promises);
-  titles.forEach((title) => console.log(title));
+  console.log('[ Result length ] :', titles.length);
+  console.log('[ Expected Tasks ] :', urls.length);
+  console.log('[ Metrics ] :', await PuppeteerPool.getPoolMetrics());
 }
 
 main();
+
 ```
 
 ## Support
