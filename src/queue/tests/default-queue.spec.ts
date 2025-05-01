@@ -75,7 +75,7 @@ describe('Queue function test', () => {
     it('should return all elements', () => {
       queue.enqueue({ element: 1 });
       queue.enqueue({ element: 2 });
-      console.log('Lint-staged test');
+
       const values = queue.values();
       expect(values).toHaveLength(2);
       expect(values[0].element).toBe(1);
