@@ -1,0 +1,25 @@
+name: NPM Registry Publish
+on:
+  release:
+    types: [published]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Node.js Environment setup
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org/'
+      - name: Install Dependencies
+        run: npm install
+      - name: Run test before publish
+        run: npm test
+      - name: Build project
+        run: npm run build
+      - name: Publish to registry
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
