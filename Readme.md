@@ -13,6 +13,7 @@ Puppeteer-Pool is a lightweight and efficient library for managing multiple Pupp
     <img src="./diagram/puppeteer-pool.png" width="200">
   </div>
 </div>
+
 ## Package Installation
 
 - `npm`
