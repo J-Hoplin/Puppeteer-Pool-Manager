@@ -14,6 +14,18 @@ Puppeteer-Pool is a lightweight and efficient library for managing multiple Pupp
   </div>
 </div>
 
+### Puppeteer Pool Manager
+
+<div style="display: flex; align-items: center;">
+  <div style="flex: 1;">
+
+Puppeteer-Pool is a lightweight and efficient library for managing multiple Puppeteer contexts with ease. Designed for scalable web scraping and automation, it helps you handle concurrency and resource management without the hassle.
+
+  </div>
+  <div>
+    <img src="./diagram/puppeteer-pool.png" width="200">
+  </div>
+</div>
 ## Package Installation
 
 - `npm`
@@ -147,7 +159,6 @@ Puppeteer-Pool is a lightweight and efficient library for managing multiple Pupp
 
 ## Simple Demo
 
-
 ```typescript
 import { ContextMode, PuppeteerPool, QueueMode } from '@hoplin/puppeteer-pool';
 
@@ -193,7 +204,6 @@ async function main() {
 }
 
 main();
-
 ```
 
 ## Support
