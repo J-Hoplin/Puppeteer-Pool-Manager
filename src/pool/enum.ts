@@ -22,3 +22,14 @@ export enum EventTags {
   PENDING = 'PENDING',
   DONE = 'DONE',
 }
+
+/**
+ * Enumeration for Task Queue Types
+ *
+ * DEFAULT: Default queue type
+ * PRIORITY: Priority queue type
+ */
+export enum QueueMode {
+  DEFAULT = 'DEFAULT',
+  PRIORITY = 'PRIORITY',
+}

@@ -21,67 +21,41 @@
   pnpm install puppeteer @hoplin/puppeteer-pool
   ```
 
-## Release 2.0.8(and it's sub versions)
+## Release 2.1.0
 
-- `PuppeteerPool.start` required parameter as config type
+- Garbage collection is executed at the end of each context task
+- Client's method are now all 'static'. You don't need to create instance of client and need migration if you are using previous version(`< 2.1.0`).
+  - `getPoolMetrics`
+  - `runTask`
+  - `stop`
+  - `checkInstanceInitalized`
+- Add Priority Queue for task queue
 
-  ```typescript
-  type PuppeteerPoolStartOptions = {
-    /**
-     * Number of concurrency,
-     * Default is 3
-     */
-    concurrencyLevel: number;
-    /**
-     * Context mode
-     * Default is ContextMode.SHARED
-     */
-    contextMode: ContextMode;
-    /**
-     * Puppeteer launch options
-     * Default is {}
-     */
-    options?: puppeteer.LaunchOptions;
-    /**
-     * Custom config path
-     */
-    customConfigPath?: string;
-    /**
-     * Enable log
-     * Default is true
-     */
-    enableLog?: boolean;
-    /**
-     * Log level
-     * Default is LogLevel.DEBUG
-     */
-    logLevel?: LogLevel;
-  };
-  ```
+  - `taskQueueType` option is added to `PuppeteerPoolStartOptions`
 
-- Remove pino logger dependency and implement custom logger
-  - You can config `log level` and `enable log` in `PuppeteerPool.start` function
-- Enhanced Concurrency Control
+    - Priorty can be specified in the second factor of 'PuppeteerPool.runTask'. The larger the number, the higher the priority, and the priority is ignored in the Default Queue.
+    - Enum: `QueueMode`
+    - Example
 
-## Next Features in 2.0.9
+      ```typescript
+      import {
+        ContextMode,
+        PuppeteerPool,
+        QueueMode,
+      } from '@hoplin/puppeteer-pool';
 
-- Detailed Metrics Monitoring
-  - Monitor metrics by context
-- Support to use Playwright instead of Puppeteer
+      const priority = 10;
 
-## Fully changed from 2.0.0
+      await PuppeteerPool.start({
+        taskQueueType: QueueMode.PRIORITY,
+      });
 
-The internal implementation is event-based, which significantly improves the stability. In addition, instead of relying
-on generic-pools to manage the pool, we have solved the problem of third-party dependency and features that were
-incompatible with generic-pools through our own pooling. However, there are many API changes and some features are
-currently disabled. If you update to 2.0.0, please be aware of the migration progress and disabled features for the
-changes.
-Also cluster mode client will be provided in near future.
-
-### API Changes
-
-From version 2.0.0, client API will return dispatcher instance after initialization.
-After that you can use dispatcher to control pool manager.
+      PuppeteerPool.runTask(async (page) => {
+        await page.goto(url);
+        const title = await page.title();
+        return title;
+      }, priority);
+      ```
 
 **[ Client API ]**
 
@@ -132,20 +106,23 @@ After that you can use dispatcher to control pool manager.
     - `Promise<PuppeteerPool>`
     - Returns PuppeteerPool Instance.
 
-- Instance<PuppeteerPool>.stop
+- PuppeteerPool.stop
+  - Static Method
   - Description: Stop pool manager. It will close all sessions and terminate pool manager.
   - Return
     - `Promise<void>`
-- Instance<PuppeteerPool>.runTask
+- PuppeteerPool.runTask
+  - Static Method
   - Description: Run task in pool manager. It will return result of task.
   - Args
-    - task
-      - Required
-      - Function
+  - task
+    - Required
+    - Function
   - Return
-    - `Promise<any>`
-    - Returns result of task(Same return type with task callback return type)
-- Instance<PuppeteerPool>.getPoolMetrics
+  - `Promise<any>`
+  - Returns result of task(Same return type with task callback return type)
+- PuppeteerPool.getPoolMetrics
+  - Static Method
   - Description: Get pool metrics. It will return metrics of pool manager.
   - Return
     ```json
@@ -158,35 +135,53 @@ After that you can use dispatcher to control pool manager.
 
 ## Simple Demo
 
+
 ```typescript
-import { ContextMode, PuppeteerPool } from '@hoplin/puppeteer-pool';
+import { ContextMode, PuppeteerPool, QueueMode } from '@hoplin/puppeteer-pool';
 
 async function main() {
-  const poolInstance = await PuppeteerPool.start({
-    concurrencyLevel: 2,
+  await PuppeteerPool.start({
+    concurrencyLevel: 6,
     contextMode: ContextMode.ISOLATED,
+    customConfigPath: `./puppeteer-pool-config.json`,
+    taskQueueType: QueueMode.PRIORITY,
   });
 
-  const urls = [
+  const baseUrls = [
     'https://www.google.com',
     'https://www.bing.com',
     'https://github.com',
+    'https://www.naver.com',
+    'https://www.daum.net',
+    'https://www.youtube.com',
+    'https://www.amazon.com',
+    'https://www.netflix.com',
   ];
 
-  console.log(await poolInstance.getPoolMetrics());
+  const urls = Array.from({ length: 50 }, (_, index) => {
+    const baseUrl = baseUrls[index % baseUrls.length];
+    const priority = Math.floor(Math.random() * 10) + 1;
+    return { url: baseUrl, priority: priority };
+  });
 
-  const promises = urls.map((url) =>
-    poolInstance.runTask(async (page) => {
+  const promises = urls.map(({ url, priority }) => {
+    console.log(`Enqueue task: ${url}`);
+    return PuppeteerPool.runTask(async (page) => {
+      console.log(`Process task for ${url} with priority ${priority}`);
       await page.goto(url);
-      return await page.title();
-    }),
-  );
+      const title = await page.title();
+      return title;
+    }, priority);
+  });
 
   const titles = await Promise.all(promises);
-  titles.forEach((title) => console.log(title));
+  console.log('[ Result length ] :', titles.length);
+  console.log('[ Expected Tasks ] :', urls.length);
+  console.log('[ Metrics ] :', await PuppeteerPool.getPoolMetrics());
 }
 
 main();
+
 ```
 
 ## Support

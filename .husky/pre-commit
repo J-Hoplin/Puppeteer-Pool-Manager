@@ -1,3 +1,4 @@
 #!/bin/bash
 
-npx prettier --write .
+npm run build
+npx lint-staged
