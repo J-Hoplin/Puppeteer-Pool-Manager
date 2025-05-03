@@ -1,7 +1,18 @@
 # Puppeteer Pool Manager
 
 ![NPM Version](https://img.shields.io/npm/v/%40hoplin%2Fpuppeteer-pool?style=for-the-badge)
+### Puppeteer Pool Manager
 
+<div style="display: flex; align-items: center;">
+  <div style="flex: 1;">
+
+Puppeteer-Pool is a lightweight and efficient library for managing multiple Puppeteer browser instances with ease. Designed for scalable web scraping and automation, it helps you handle concurrency and resource management without the hassle.
+
+  </div>
+  <div>
+    <img src="./diagram/puppeteer-pool.png" width="200">
+  </div>
+</div>
 ## Package Installation
 
 - `npm`
