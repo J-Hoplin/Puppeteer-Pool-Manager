@@ -19,6 +19,14 @@ jobs:
         run: npm test
       - name: Build project
         run: npm run build
+
+      - name: Version patch and push
+        run: |
+          cd libs/error-types
+          git config user.name "${{ secrets.ACTION_GIT_USER_NAME }}"
+          git config user.email "${{ secrets.ACTION_GIT_USER_EMAIL }}"
+          yarn version --patch -m "chore(release): %s"
+          git push origin HEAD
       - name: Publish to registry
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -26,7 +26,6 @@ export const app_config = {
   threshold: {
     activate: true,
     interval: 5,
-    cpu: 80,
     memory: 2048,
   },
 };
@@ -92,12 +91,6 @@ export const loadConfig = (configPath: string = null): ConfigType => {
       'Threshold Config',
       'Interval',
     );
-    // Threshold CPU configs
-    if (loadedConfig.threshold?.cpu) {
-      app_config.threshold.cpu =
-        loadedConfig.threshold.cpu ?? app_config.threshold.cpu;
-      ValidateInteager(app_config.threshold.cpu, 1, 'CPU Config', 'CPU');
-    }
     // Threshold Memory configs
     if (loadedConfig.threshold?.memory) {
       app_config.threshold.memory =

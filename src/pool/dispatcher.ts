@@ -14,7 +14,6 @@ const DEFAULT_VALUES = {
   CONCURRENCY_LEVEL: 1,
   CONTEXT_MODE: ContextMode.SHARED,
   THRESHOLD: {
-    cpu: 80,
     memory: 1024,
   },
   QUEUE_CHECK_INTERVAL: 100,
@@ -50,7 +49,7 @@ export class TaskDispatcher extends EventEmitter {
   private logLevel: LogLevel;
   private launchOptions: PuppeteerLaunchOptions = {};
   private poolConfig: ConfigType;
-  private threshold: { cpu: number; memory: number } = DEFAULT_VALUES.THRESHOLD;
+  private threshold: { memory: number } = DEFAULT_VALUES.THRESHOLD;
 
   // Logger
   private logger: Logger = new Logger();
@@ -167,7 +166,6 @@ export class TaskDispatcher extends EventEmitter {
     );
     if (this.poolConfig.threshold.activate) {
       this.threshold = {
-        cpu: this.poolConfig.threshold.cpu,
         memory: this.poolConfig.threshold.memory,
       };
       this.metricsWatcher.startThresholdWatcher(
@@ -256,7 +254,6 @@ export class TaskDispatcher extends EventEmitter {
       );
       if (this.poolConfig.threshold.activate) {
         this.threshold = {
-          cpu: this.poolConfig.threshold.cpu,
           memory: this.poolConfig.threshold.memory,
         };
         this.metricsWatcher.startThresholdWatcher(
