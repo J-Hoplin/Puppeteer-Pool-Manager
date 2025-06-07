@@ -19,22 +19,18 @@ export class MetricsWatcher {
   }
 
   public startThresholdWatcher(
-    limit: { cpu: number; memory: number },
+    limit: { memory: number },
     cbOverThreshold: () => Promise<void>,
     checkIntervalSecond: number,
   ) {
     /**
-     * cpu: Should be a percentage
      * memory: Should be in MB
      */
     this.intervalId = setInterval(async () => {
       const metrics = await this.metrics();
-      if (
-        metrics.cpuUsage > limit.cpu ||
-        metrics.memoryUsageValue > limit.memory
-      ) {
+      if (metrics.memoryUsageValue > limit.memory) {
         this.logger.warn(
-          `Over threshold: CPU: ${metrics.cpuUsage.toFixed(2)}% Memory: ${metrics.memoryUsageValue.toFixed(2)}MB`,
+          `Over threshold - Memory: ${metrics.memoryUsageValue.toFixed(2)}MB`,
         );
         await cbOverThreshold();
       }

@@ -1,6 +1,7 @@
 # Puppeteer Pool Manager
 
 ![NPM Version](https://img.shields.io/npm/v/%40hoplin%2Fpuppeteer-pool?style=for-the-badge)
+
 ### Puppeteer Pool Manager
 
 <div style="display: flex; align-items: center;">
@@ -200,7 +201,6 @@ main();
 - Config
   - Support config customize
 - Threshold Watcher
-  - CPU
   - Memory
   - Support safe pool instance reset in runtime
 - Metrics
@@ -230,7 +230,6 @@ config path, you can pass path to `start()` function as parameter.
   "threshold": {
     "activate": true,
     "interval": 5,
-    "cpu": 80,
     "memory": 2048
   }
 }
@@ -257,12 +256,9 @@ config path, you can pass path to `start()` function as parameter.
 
 - `activate`: Activate threshold watcher
 - `interval`: Interval of threshold watcher
-- `cpu`: CPU threshold value
 - `memory`: Memory threshold value
   - **Inteager Validation**
     - `interval` should be at least 1
     - `interval` should be integer
-    - `cpu` should be at least 1
-    - `cpu` should be integer
     - `memory` should be at least 1
     - `memory` should be integer
