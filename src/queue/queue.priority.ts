@@ -2,6 +2,7 @@ import { IQueue, PriorityQueueElement } from './queue.interface';
 
 export class PriorityQueue<T> implements IQueue<T> {
   private queue: PriorityQueueElement<T>[] = [];
+  private availabilityListener?: () => void;
 
   public enqueue(param: {
     element: T;
@@ -24,6 +25,7 @@ export class PriorityQueue<T> implements IQueue<T> {
       insertIndex++;
     }
     this.queue.splice(insertIndex, 0, newElement);
+    this.availabilityListener?.();
 
     return elementId;
   }
@@ -57,5 +59,9 @@ export class PriorityQueue<T> implements IQueue<T> {
 
   public values(): PriorityQueueElement<T>[] {
     return this.queue;
+  }
+
+  public onAvailable(callback: () => void): void {
+    this.availabilityListener = callback;
   }
 }

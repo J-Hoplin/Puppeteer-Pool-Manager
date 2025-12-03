@@ -1,9 +1,10 @@
 /**
  * APIs for RESTful API mode
  */
+import { ContextMode, QueueMode, QueueProvider } from '../pool/enum';
 import { PoolNotInitializedException } from '../error';
-import { ContextMode, QueueMode } from '../pool/enum';
 import { TaskDispatcher } from '../pool/dispatcher';
+import { envQueueProvider } from '../queue';
 import { RequestedTask } from '../types';
 import * as puppeteer from 'puppeteer';
 import { LogLevel } from '../logger';
@@ -17,6 +18,10 @@ export type PuppeteerPoolStartOptions = {
    * Task queue type
    */
   taskQueueType?: QueueMode;
+  /**
+   * Queue provider
+   */
+  queueProvider?: QueueProvider;
   /**
    * Context mode
    */
@@ -41,8 +46,9 @@ export type PuppeteerPoolStartOptions = {
 
 export class PuppeteerPool {
   private static isInitialized = false;
-  private static dispatcherInstance: TaskDispatcher;
-  private static instance: PuppeteerPool;
+  private static dispatcherInstance: TaskDispatcher | null = null;
+  private static instance: PuppeteerPool | null = null;
+  private static lastStartOptions?: PuppeteerPoolStartOptions;
 
   /**
    * Check if the instance is initialized
@@ -62,23 +68,26 @@ export class PuppeteerPool {
   /**
    * Invoke this function to start a new Puppeteer Pool
    */
-  public static async start(options: PuppeteerPoolStartOptions) {
+  public static async start(options: PuppeteerPoolStartOptions = {}) {
     const startOptions: PuppeteerPoolStartOptions = {
       concurrencyLevel: 3,
       contextMode: ContextMode.SHARED,
       options: {},
       enableLog: true,
       taskQueueType: QueueMode.PRIORITY,
+      queueProvider: envQueueProvider(),
       logLevel: LogLevel.DEBUG,
       ...options,
     };
 
     if (!PuppeteerPool.isInitialized) {
+      PuppeteerPool.lastStartOptions = startOptions;
       // Initialize Task Dispatcher
       PuppeteerPool.dispatcherInstance = new TaskDispatcher();
       await PuppeteerPool.dispatcherInstance.init(
         startOptions.concurrencyLevel,
         startOptions.taskQueueType,
+        startOptions.queueProvider,
         startOptions.contextMode,
         startOptions.enableLog,
         startOptions.logLevel,
@@ -90,7 +99,7 @@ export class PuppeteerPool {
       // Change state to initialized
       PuppeteerPool.isInitialized = true;
     }
-    return PuppeteerPool.instance;
+    return PuppeteerPool.instance!;
   }
 
   /**
@@ -99,8 +108,22 @@ export class PuppeteerPool {
    * Please enroll this function in your graceful shutdown process
    */
   public static async stop() {
-    this.checkInstanceInitalized();
-    await PuppeteerPool.dispatcherInstance.close();
+    if (!PuppeteerPool.isInitialized) {
+      return;
+    }
+    await PuppeteerPool.dispatcherInstance!.close();
+    PuppeteerPool.isInitialized = false;
+    PuppeteerPool.dispatcherInstance = null;
+    PuppeteerPool.instance = null;
+  }
+
+  /**
+   * Restart pool with previous or supplied options
+   */
+  public static async restart(options?: PuppeteerPoolStartOptions) {
+    await PuppeteerPool.stop();
+    const restartOptions = options ?? PuppeteerPool.lastStartOptions ?? {};
+    return PuppeteerPool.start(restartOptions);
   }
 
   /**
@@ -110,7 +133,7 @@ export class PuppeteerPool {
    */
   public static async runTask<T>(task: RequestedTask<T>, priority: number = 1) {
     this.checkInstanceInitalized();
-    return await PuppeteerPool.dispatcherInstance.dispatchTask(task, priority);
+    return await PuppeteerPool.dispatcherInstance!.dispatchTask(task, priority);
   }
 
   /**
@@ -118,6 +141,6 @@ export class PuppeteerPool {
    */
   public static async getPoolMetrics() {
     this.checkInstanceInitalized();
-    return await PuppeteerPool.dispatcherInstance.getPoolMetrics();
+    return await PuppeteerPool.dispatcherInstance!.getPoolMetrics();
   }
 }

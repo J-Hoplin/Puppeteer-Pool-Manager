@@ -112,6 +112,11 @@ Puppeteer-Pool is a lightweight and efficient library for managing multiple Pupp
        * Default is LogLevel.DEBUG
        */
       logLevel?: LogLevel;
+      /**
+       * Queue provider (MEMORY | RABBITMQ | ACTIVEMQ)
+       * Default is process.env.PUPPETEER_POOL_QUEUE_PROVIDER or MEMORY
+       */
+      queueProvider?: QueueProvider;
     };
     ```
 
@@ -208,6 +213,17 @@ main();
     - CPU usage of pool
     - Memory usage of pool
     - Managing session count in runtime
+
+### Queue Provider Strategy
+
+- Configure `PUPPETEER_POOL_QUEUE_PROVIDER` environment variable (`MEMORY`, `RABBITMQ`, or `ACTIVEMQ`) or pass `queueProvider` to `PuppeteerPool.start`.
+- RabbitMQ provider
+  - Requires the `amqplib` package (install it only when you enable this provider).
+  - Optional envs: `PUPPETEER_POOL_RABBITMQ_URL` (default `amqp://localhost`) and `PUPPETEER_POOL_RABBITMQ_QUEUE` (default `puppeteer_pool_tasks`).
+- ActiveMQ provider
+  - Requires the `stompit` package.
+  - Optional envs: `PUPPETEER_POOL_ACTIVEMQ_URL` (default `stomp://guest:guest@localhost:61613`) and `PUPPETEER_POOL_ACTIVEMQ_QUEUE` (default `/queue/puppeteer_pool_tasks`).
+- Priority queue mode is only available when `queueProvider` is `MEMORY`.
 
 ## Puppeteer Pool Manager Config
 

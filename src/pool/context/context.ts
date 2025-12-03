@@ -3,8 +3,7 @@ import { RequestedTask, RunTaskResponse } from '../../types/type';
 import * as puppeteer from 'puppeteer';
 
 export abstract class TaskContext {
-  protected page: puppeteer.Page;
-  private ResponsiveCheckTimeOut = 200;
+  protected page: puppeteer.Page | null = null;
 
   constructor(
     protected readonly browser: puppeteer.Browser,
@@ -12,84 +11,63 @@ export abstract class TaskContext {
   ) {}
 
   public async checkContextResponsive() {
-    try {
-      await this.page.evaluate(
-        () => true,
-        {},
-        { timeout: this.ResponsiveCheckTimeOut },
-      );
-      return true;
-    } catch {
-      return false;
+    return this.browser.isConnected();
+  }
+
+  protected abstract createPage(): Promise<puppeteer.Page>;
+
+  private async preparePage() {
+    if (this.page) {
+      await this.clearResource();
     }
+    this.page = await this.createPage();
   }
 
   @SetState(ContextState.RUNNING)
   protected async clearResource() {
-    /**
-     * Clearing Browser Context
-     * - Cache
-     * - Cookies
-     * - Local Storage
-     * - Session Storage
-     */
-    if (this.page) {
+    if (!this.page) {
+      return;
+    }
+    try {
       if (this.page.url() !== 'about:blank') {
-        // 'about:blank' can't access to local storage
-        // It'll lead to chronium security error if try to access local storage in 'about:blank'
-        await this.page.evaluate(() => {
-          localStorage.clear();
-          sessionStorage.clear();
-        });
+        await this.page.goto('about:blank');
       }
-      const devToolSession = await this.page.createCDPSession();
-      await this.page.goto('about:blank');
-      // https://chromedevtools.github.io/devtools-protocol/tot/HeapProfiler/#method-collectGarbage
-      await devToolSession.send('HeapProfiler.enable');
-      await devToolSession.send('HeapProfiler.collectGarbage');
-      await devToolSession.send('Network.clearBrowserCache');
-      await devToolSession.send('Network.clearBrowserCookies');
+      await this.page.close();
+    } catch {
+      // Ignore cleanup errors
+    } finally {
+      this.page = null;
     }
   }
 
   @RequireState(ContextState.IDLE)
   @SetState(ContextState.RUNNING)
   async runTask<T>(task: RequestedTask<T>): Promise<RunTaskResponse<T>> {
-    if (this.page) {
-      try {
-        // Raise error if context exceed timeout
-        const result = await Promise.race([
-          task(this.page),
-          new Promise((_, reject) =>
-            setTimeout(
-              () => reject('Timeout'),
-              this.contextTimeoutSecond * 1000,
-            ),
-          ),
-        ]);
-        return {
-          success: true,
-          data: result as T,
-        };
-      } catch (e) {
-        return {
-          success: false,
-          error: e as Error,
-        };
-      } finally {
-        // Clear resource after task is done
-        // This is to prevent memory leak and to prevent waste of resource
-        await this.clearResource();
-      }
+    try {
+      await this.preparePage();
+      const result = await Promise.race([
+        task(this.page!),
+        new Promise((_, reject) =>
+          setTimeout(() => reject('Timeout'), this.contextTimeoutSecond * 1000),
+        ),
+      ]);
+      return {
+        success: true,
+        data: result as T,
+      };
+    } catch (e) {
+      return {
+        success: false,
+        error: e as Error,
+      };
+    } finally {
+      await this.clearResource();
     }
   }
 
   @RequireState(ContextState.IDLE)
   async free(): Promise<void> {
-    if (this.page) {
-      await this.clearResource();
-      await this.page.close();
-    }
+    await this.clearResource();
   }
 
   abstract init(): Promise<void> | void;

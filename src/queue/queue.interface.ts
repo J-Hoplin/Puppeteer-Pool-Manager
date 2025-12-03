@@ -21,6 +21,9 @@ export type PriorityQueueElement<T> = QueueElement<T> & {
 };
 
 export interface IQueue<T> {
+  init?(): Promise<void>;
+  dispose?(): Promise<void>;
+  onAvailable?(callback: () => void): void;
   /**
    * Require as getter
    */

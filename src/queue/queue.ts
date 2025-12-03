@@ -2,6 +2,7 @@ import { IQueue, QueueElement } from './queue.interface';
 
 export class Queue<T> implements IQueue<T> {
   private queue: QueueElement<T>[] = [];
+  private availabilityListener?: () => void;
 
   public enqueue(param: { element: T; id?: string }): string {
     // Suppress UUID usage for CPU Intensive Task
@@ -11,6 +12,7 @@ export class Queue<T> implements IQueue<T> {
       element: param.element,
       enqueuedAt: new Date(),
     });
+    this.availabilityListener?.();
     return elementId;
   }
 
@@ -43,5 +45,9 @@ export class Queue<T> implements IQueue<T> {
 
   public values(): QueueElement<T>[] {
     return this.queue;
+  }
+
+  public onAvailable(callback: () => void): void {
+    this.availabilityListener = callback;
   }
 }

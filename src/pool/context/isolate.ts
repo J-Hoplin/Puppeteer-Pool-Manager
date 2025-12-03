@@ -6,21 +6,35 @@ export class IsolateContext extends TaskContext {
   /**
    * Isolated Context
    */
-  private context: puppeteer.BrowserContext;
+  private context: puppeteer.BrowserContext | null = null;
 
   @SetState(ContextState.IDLE)
   async init(): Promise<void> {
     this.context = await this.browser.createBrowserContext();
-    this.page = await this.context.newPage();
+  }
+
+  protected async createPage(): Promise<puppeteer.Page> {
+    if (!this.context) {
+      this.context = await this.browser.createBrowserContext();
+    }
+    return this.context.newPage();
   }
 
   @RequireState(ContextState.IDLE)
   @SetState(ContextState.RUNNING)
   async fix(): Promise<void> {
-    if (this.page) {
+    if (this.context) {
       await this.context.close();
-      this.context = await this.browser.createBrowserContext();
-      this.page = await this.context.newPage();
+    }
+    this.context = await this.browser.createBrowserContext();
+  }
+
+  @RequireState(ContextState.IDLE)
+  async free(): Promise<void> {
+    await super.free();
+    if (this.context) {
+      await this.context.close();
+      this.context = null;
     }
   }
 }
