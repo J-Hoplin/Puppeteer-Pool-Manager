@@ -134,7 +134,7 @@ Puppeteer-Pool is a lightweight and efficient library for managing multiple Pupp
 ```typescript
 import { ContextMode, PuppeteerPool, QueueMode } from '@hoplin/puppeteer-pool';
 
-const visitTask = PuppeteerPool.enrollTask(
+const visitTaskID = PuppeteerPool.enrollTask(
   'visit-url',
   async (page, payload: { url: string }) => {
     await page.goto(payload.url);
@@ -169,7 +169,7 @@ async function main() {
 
   const promises = urls.map(({ url, priority }) => {
     console.log(`Enqueue task: ${url}`);
-    return PuppeteerPool.runTask(visitTask, { url }, priority);
+    return PuppeteerPool.runTask(visitTaskID, { url }, priority);
   });
 
   const titles = await Promise.all(promises);
