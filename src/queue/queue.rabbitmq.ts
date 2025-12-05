@@ -100,7 +100,6 @@ export class RabbitMQQueue<T> implements IQueue<T> {
       await this.connection.close();
       this.connection = null;
     }
-    this.taskStore.clear();
     this.pendingMessages.length = 0;
   }
 
