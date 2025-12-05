@@ -33,3 +33,9 @@ export enum QueueMode {
   DEFAULT = 'DEFAULT',
   PRIORITY = 'PRIORITY',
 }
+
+export enum QueueProvider {
+  MEMORY = 'MEMORY',
+  RABBITMQ = 'RABBITMQ',
+  SQS = 'SQS',
+}

@@ -1,5 +1,6 @@
 import { RequireState, SetState, ContextState } from '../../decorator/state';
 import { TaskContext } from './context';
+import * as puppeteer from 'puppeteer';
 
 export class SharedContext extends TaskContext {
   /**
@@ -9,15 +10,16 @@ export class SharedContext extends TaskContext {
    */
   @SetState(ContextState.IDLE)
   async init(): Promise<void> {
-    this.page = await this.browser.newPage();
+    // No warm-up required; pages are created per request
+  }
+
+  protected async createPage(): Promise<puppeteer.Page> {
+    return this.browser.newPage();
   }
 
   @RequireState(ContextState.IDLE)
   @SetState(ContextState.RUNNING)
   async fix(): Promise<void> {
-    if (this.page) {
-      await this.free();
-      this.page = await this.browser.newPage();
-    }
+    await this.free();
   }
 }

@@ -7,7 +7,7 @@
  */
 export type QueueElement<T> = {
   id: string;
-  element: T;
+  payload: T;
   enqueuedAt: Date;
 };
 
@@ -31,10 +31,10 @@ export interface IQueue<T> {
    *
    * For both normal queue and priority queue
    */
-  enqueue(param: { element: T; id?: string }): string;
-  enqueue(param: { element: T; id?: string; priority?: number }): string;
+  enqueue(param: { payload: T; id?: string }): string;
+  enqueue(param: { payload: T; id?: string; priority?: number }): string;
 
-  dequeue(): { id: string; element: T; enqueuedAt: Date };
+  dequeue(): { id: string; payload: T; enqueuedAt: Date };
 
   remove(id: string): void;
 
@@ -42,5 +42,11 @@ export interface IQueue<T> {
 
   contains(id: string): boolean;
 
-  values(): { id: string; element: T; enqueuedAt: Date }[];
+  values(): { id: string; payload: T; enqueuedAt: Date }[];
+}
+
+export interface IExternalQueue<T> extends IQueue<T> {
+  init(): Promise<void>;
+  dispose(): Promise<void>;
+  onAvailable(callback: () => void): void;
 }

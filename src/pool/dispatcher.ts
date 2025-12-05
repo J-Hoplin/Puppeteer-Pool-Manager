@@ -1,11 +1,19 @@
+import {
+  IExternalQueue,
+  IQueue,
+  PriorityQueue,
+  Queue,
+  RabbitMQQueue,
+  SQSQueue,
+} from '../queue';
+import { ContextMode, EventTags, QueueMode, QueueProvider } from './enum';
 import { IsolateContext, SharedContext, TaskContext } from './context';
-import { RequestedTask, RunTaskResponse } from '../types/type';
+import { RunTaskResponse, TaskMessage } from '../types/type';
 import { PoolNotInitializedException } from '../error/pool';
-import { ContextMode, EventTags, QueueMode } from './enum';
-import { IQueue, PriorityQueue, Queue } from '../queue';
 import { MetricsWatcher } from '../watcher/metrics';
 import { ConfigType, loadConfig } from '../configs';
 import { PuppeteerLaunchOptions } from 'puppeteer';
+import { taskRegistry } from './task-registry';
 import { Logger, LogLevel } from '../logger';
 import { EventEmitter } from 'node:events';
 import * as puppeteer from 'puppeteer';
@@ -25,7 +33,7 @@ const INTERNAL_EVENTS = {
 
 export class TaskDispatcher extends EventEmitter {
   // Task Queue
-  private taskQueue: IQueue<RequestedTask>;
+  private taskQueue: IQueue<TaskMessage>;
 
   // Context Queue
   private idleContextQueue: IQueue<TaskContext> = new Queue<TaskContext>();
@@ -50,6 +58,8 @@ export class TaskDispatcher extends EventEmitter {
   private launchOptions: PuppeteerLaunchOptions = {};
   private poolConfig: ConfigType;
   private threshold: { memory: number } = DEFAULT_VALUES.THRESHOLD;
+  private queueProvider: QueueProvider = QueueProvider.MEMORY;
+  private taskQueueMode: QueueMode = QueueMode.DEFAULT;
 
   // Logger
   private logger: Logger = new Logger();
@@ -77,19 +87,26 @@ export class TaskDispatcher extends EventEmitter {
         contextId: string;
         context: TaskContext;
         taskId: string;
-        task: RequestedTask;
+        task: TaskMessage;
       }[] = [];
       for (let i = 0; i < batchCount; i++) {
         const context = this.idleContextQueue.dequeue();
+        if (!context) {
+          break;
+        }
         const task = this.taskQueue.dequeue();
         if (!task) {
+          this.idleContextQueue.enqueue({
+            payload: context.payload,
+            id: context.id,
+          });
           continue;
         }
         batchTasks.push({
           contextId: context.id,
-          context: context.element,
+          context: context.payload,
           taskId: task.id,
-          task: task.element,
+          task: task.payload,
         });
       }
       await Promise.all(
@@ -108,27 +125,34 @@ export class TaskDispatcher extends EventEmitter {
   async init(
     concurrencyLevel: number = DEFAULT_VALUES.CONCURRENCY_LEVEL,
     taskQueueType: QueueMode = QueueMode.DEFAULT,
+    queueProvider: QueueProvider = QueueProvider.MEMORY,
     contextMode: ContextMode = DEFAULT_VALUES.CONTEXT_MODE,
     enableLog: boolean = true,
     logLevel: LogLevel = LogLevel.DEBUG,
     options: PuppeteerLaunchOptions = {},
     customPoolConfigPath?: string,
   ) {
-    this.taskQueue =
-      taskQueueType === QueueMode.DEFAULT ? new Queue() : new PriorityQueue();
+    this.queueProvider = queueProvider;
+    this.taskQueueMode = taskQueueType;
+    await this.setupTaskQueue(queueProvider, taskQueueType);
+
     // Logger setting
     this.enableLog = enableLog;
     this.logLevel = logLevel;
     this.logger.setEnabled(enableLog);
     this.logger.setLogLevel(logLevel);
+
     // Read Config
     this.poolConfig = loadConfig(customPoolConfigPath);
     this.logger.info('Initializing Task Dispatcher');
+
     // Set instance variables
     this.concurrencyLevel = concurrencyLevel;
+
     // Context Mode and Puppeteer launch options
     this.contextMode = contextMode;
     this.launchOptions = options;
+
     // Initialize Main Browser
     this.browser = await puppeteer.launch({
       ...this.launchOptions,
@@ -140,22 +164,24 @@ export class TaskDispatcher extends EventEmitter {
 
     // Initialize contexts
     for (let i = 0; i < concurrencyLevel; i++) {
-      let id;
+      let id = '';
+
       if (contextMode === ContextMode.SHARED) {
         const instance = new SharedContext(
           this.browser,
           this.poolConfig.context.timeout,
         );
         await instance.init();
-        id = this.idleContextQueue.enqueue({ element: instance });
+        id = this.idleContextQueue.enqueue({ payload: instance });
       } else {
         const instance = new IsolateContext(
           this.browser,
           this.poolConfig.context.timeout,
         );
         await instance.init();
-        id = this.idleContextQueue.enqueue({ element: instance });
+        id = this.idleContextQueue.enqueue({ payload: instance });
       }
+
       this.logger.info(`Context initialized - ID: ${id}`);
     }
     // Start Metrics Watcher
@@ -213,6 +239,9 @@ export class TaskDispatcher extends EventEmitter {
       }
       // Close browser and previous threshold watcher(If activated) and remove all of the contexts from queue
       await this.close();
+      if (this.isExternalProvider(this.queueProvider)) {
+        await this.setupTaskQueue(this.queueProvider, this.taskQueueMode);
+      }
       this.idleContextQueue.clear();
       this.runningContextQueue.clear();
 
@@ -225,7 +254,7 @@ export class TaskDispatcher extends EventEmitter {
         },
       });
       for (let i = 0; i < concurrencyLevel; i++) {
-        let id;
+        let id = '';
         if (contextMode === ContextMode.SHARED) {
           const instance = new SharedContext(
             this.browser,
@@ -233,7 +262,7 @@ export class TaskDispatcher extends EventEmitter {
           );
           await instance.init();
           id = this.idleContextQueue.enqueue({
-            element: instance,
+            payload: instance,
           });
         } else {
           const instance = new IsolateContext(
@@ -242,7 +271,7 @@ export class TaskDispatcher extends EventEmitter {
           );
           await instance.init();
           id = this.idleContextQueue.enqueue({
-            element: instance,
+            payload: instance,
           });
         }
         this.logger.info(`Context initialized - ID: ${id}`);
@@ -275,23 +304,23 @@ export class TaskDispatcher extends EventEmitter {
     }
   }
 
-  async dispatchTask<T>(
-    task: RequestedTask<T>,
+  async dispatchTask<TResult>(
+    task: TaskMessage,
     priority?: number,
-  ): Promise<RunTaskResponse<T>> {
+  ): Promise<RunTaskResponse<TResult>> {
     if (!this.isInitialized) {
       throw new PoolNotInitializedException();
     }
     const event = new EventEmitter();
     const taskId = this.taskQueue.enqueue({
-      element: task,
+      payload: task,
       priority: priority,
     });
     this.taskEvents.set(taskId, event);
-    const resultListener: Promise<RunTaskResponse<T>> = new Promise(
+    const resultListener: Promise<RunTaskResponse<TResult>> = new Promise(
       (resolve) => {
         // Wait until task is done and return result
-        event.once(EventTags.DONE, (result: RunTaskResponse<T>) => {
+        event.once(EventTags.DONE, (result: RunTaskResponse<TResult>) => {
           resolve(result);
         });
         // Emit run task if idle context exist and dispatcher is not restarting state
@@ -315,30 +344,39 @@ export class TaskDispatcher extends EventEmitter {
     contextId: string,
     context: TaskContext,
     taskId: string,
-    task: RequestedTask,
+    task: TaskMessage,
   ) {
     if (!this.isInitialized) {
       throw new PoolNotInitializedException();
     }
     this.runningContextQueue.enqueue({
-      element: context,
+      payload: context,
       id: contextId,
     });
     const taskEvent = this.taskEvents.get(taskId);
+    if (!taskEvent) {
+      this.logger.warn('Task event not found for id:', taskId);
+
+      // Remove context from running queue and return to idle queue if task event not found
+      this.runningContextQueue.remove(contextId);
+      this.idleContextQueue.enqueue({ payload: context });
+      return;
+    }
     taskEvent.emit(EventTags.RUNNING);
     // Recover context if non-responsive
     if (!(await context.checkContextResponsive())) {
       this.logger.info(`Fixing context due to non-responsive`);
       await context.fix();
     }
-    const result = await context.runTask(task);
+    const record = taskRegistry.resolveById(task.handlerId);
+    const result = await context.runTask(record.handler, task.payload);
     taskEvent.emit(EventTags.DONE, result);
     // Resolve task event
     this.taskEvents.delete(taskId);
     // Remove context from running queue and return to idle queue
     this.runningContextQueue.remove(contextId);
     this.idleContextQueue.enqueue({
-      element: context,
+      payload: context,
     });
     // Emit next task if pending task exist
     if (!this.taskQueue.isEmpty) {
@@ -351,6 +389,58 @@ export class TaskDispatcher extends EventEmitter {
     if (this.metricsWatcher) {
       this.metricsWatcher.stopThresholdWatcher();
     }
+    if (this.isExternalProvider(this.queueProvider)) {
+      const externalQueue = this.taskQueue as IExternalQueue<TaskMessage>;
+      await externalQueue.dispose();
+    }
     await this.browser.close();
+  }
+
+  private async setupTaskQueue(
+    provider: QueueProvider,
+    queueMode: QueueMode,
+  ): Promise<void> {
+    const queue = await this.createTaskQueue(provider, queueMode);
+    if (this.isExternalProvider(provider)) {
+      const externalQueue = queue as IExternalQueue<TaskMessage>;
+      externalQueue.onAvailable(() => {
+        if (!this.isRestarting) {
+          this.emit(this.runTaskEvent);
+        }
+      });
+      await externalQueue.init();
+    }
+    this.taskQueue = queue;
+  }
+
+  private async createTaskQueue(
+    provider: QueueProvider,
+    queueMode: QueueMode,
+  ): Promise<IQueue<TaskMessage>> {
+    // Memory Queue
+    if (provider === QueueProvider.MEMORY) {
+      return queueMode === QueueMode.DEFAULT
+        ? new Queue<TaskMessage>()
+        : new PriorityQueue<TaskMessage>();
+    }
+    // RabbitMQ Queue
+    if (queueMode === QueueMode.PRIORITY) {
+      this.logger.warn(
+        'Priority queue is not supported with external queue providers. Falling back to default ordering.',
+      );
+    }
+    if (provider === QueueProvider.RABBITMQ) {
+      return new RabbitMQQueue<TaskMessage>();
+    }
+    if (provider === QueueProvider.SQS) {
+      return new SQSQueue<TaskMessage>();
+    }
+    return new Queue<TaskMessage>();
+  }
+
+  private isExternalProvider(provider: QueueProvider) {
+    return (
+      provider === QueueProvider.RABBITMQ || provider === QueueProvider.SQS
+    );
   }
 }
