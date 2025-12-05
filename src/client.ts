@@ -1,13 +1,14 @@
 /**
  * APIs for RESTful API mode
  */
-import { ContextMode, QueueMode, QueueProvider } from '../pool/enum';
-import { PoolNotInitializedException } from '../error';
-import { TaskDispatcher } from '../pool/dispatcher';
-import { envQueueProvider } from '../queue';
-import { RequestedTask } from '../types';
+import { ContextMode, QueueMode, QueueProvider } from './pool/enum';
+import { RunTaskResponse, TaskHandler } from './types';
+import { PoolNotInitializedException } from './error';
+import { taskRegistry } from './pool/task-registry';
+import { TaskDispatcher } from './pool/dispatcher';
+import { envQueueProvider } from './queue';
 import * as puppeteer from 'puppeteer';
-import { LogLevel } from '../logger';
+import { LogLevel } from './logger';
 
 export type PuppeteerPoolStartOptions = {
   /**
@@ -131,9 +132,24 @@ export class PuppeteerPool {
    *
    * priorty option is only available in priority queue mode and will be ignored in default queue mode
    */
-  public static async runTask<T>(task: RequestedTask<T>, priority: number = 1) {
+  public static enrollTask(id: string, handler: TaskHandler) {
+    return taskRegistry.enroll(id, handler);
+  }
+
+  public static async runTask<TPayload, TResult>(
+    taskKey: symbol,
+    payload: TPayload,
+    priority: number = 1,
+  ): Promise<RunTaskResponse<TResult>> {
     this.checkInstanceInitalized();
-    return await PuppeteerPool.dispatcherInstance!.dispatchTask(task, priority);
+    const record = taskRegistry.resolveByKey(taskKey);
+    return await PuppeteerPool.dispatcherInstance!.dispatchTask<TResult>(
+      {
+        handlerId: record.id,
+        payload,
+      },
+      priority,
+    );
   }
 
   /**

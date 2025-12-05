@@ -1,5 +1,5 @@
 import { ContextState, RequireState, SetState } from '../../decorator/state';
-import { RequestedTask, RunTaskResponse } from '../../types/type';
+import { RunTaskResponse, TaskHandler } from '../../types/type';
 import * as puppeteer from 'puppeteer';
 
 export abstract class TaskContext {
@@ -42,18 +42,21 @@ export abstract class TaskContext {
 
   @RequireState(ContextState.IDLE)
   @SetState(ContextState.RUNNING)
-  async runTask<T>(task: RequestedTask<T>): Promise<RunTaskResponse<T>> {
+  async runTask<TPayload, TResult>(
+    handler: TaskHandler<TPayload, TResult>,
+    payload: TPayload,
+  ): Promise<RunTaskResponse<TResult>> {
     try {
       await this.preparePage();
       const result = await Promise.race([
-        task(this.page!),
+        handler(this.page!, payload),
         new Promise((_, reject) =>
           setTimeout(() => reject('Timeout'), this.contextTimeoutSecond * 1000),
         ),
       ]);
       return {
         success: true,
-        data: result as T,
+        data: result as TResult,
       };
     } catch (e) {
       return {

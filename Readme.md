@@ -34,41 +34,12 @@ Puppeteer-Pool is a lightweight and efficient library for managing multiple Pupp
   pnpm install puppeteer @hoplin/puppeteer-pool
   ```
 
-## Release 2.1.0
+## Highlights
 
-- Garbage collection is executed at the end of each context task
-- Client's method are now all 'static'. You don't need to create instance of client and need migration if you are using previous version(`< 2.1.0`).
-  - `getPoolMetrics`
-  - `runTask`
-  - `stop`
-  - `checkInstanceInitalized`
-- Add Priority Queue for task queue
-
-  - `taskQueueType` option is added to `PuppeteerPoolStartOptions`
-
-    - Priorty can be specified in the second factor of 'PuppeteerPool.runTask'. The larger the number, the higher the priority, and the priority is ignored in the Default Queue.
-    - Enum: `QueueMode`
-    - Example
-
-      ```typescript
-      import {
-        ContextMode,
-        PuppeteerPool,
-        QueueMode,
-      } from '@hoplin/puppeteer-pool';
-
-      const priority = 10;
-
-      await PuppeteerPool.start({
-        taskQueueType: QueueMode.PRIORITY,
-      });
-
-      PuppeteerPool.runTask(async (page) => {
-        await page.goto(url);
-        const title = await page.title();
-        return title;
-      }, priority);
-      ```
+- **Per-request tab lifecycle** – every task opens a fresh page, clears it, and closes it, which keeps renderer memory predictable even on small hosts.
+- **Handler registry API** – register once with `PuppeteerPool.enrollTask(id, handler)` and enqueue typed payloads anywhere in your app. Queue payloads contain only `{ handlerId, payload }`, so RabbitMQ/SQS can drive the pool safely across restarts.
+- **Pluggable queue providers** – pick between `MEMORY`, `RABBITMQ`, or `SQS` via `queueProvider` or the matching environment variable. Priority mode is kept for the in-memory queue.
+- **Static singleton client** – all public APIs are static (`start`, `stop`, `runTask`, `getPoolMetrics`), simplifying integration in workers, daemons, or HTTP handlers.
 
 **[ Client API ]**
 
@@ -113,7 +84,7 @@ Puppeteer-Pool is a lightweight and efficient library for managing multiple Pupp
        */
       logLevel?: LogLevel;
       /**
-       * Queue provider (MEMORY | RABBITMQ | ACTIVEMQ)
+       * Queue provider (MEMORY | RABBITMQ | SQS)
        * Default is process.env.PUPPETEER_POOL_QUEUE_PROVIDER or MEMORY
        */
       queueProvider?: QueueProvider;
@@ -129,13 +100,20 @@ Puppeteer-Pool is a lightweight and efficient library for managing multiple Pupp
   - Description: Stop pool manager. It will close all sessions and terminate pool manager.
   - Return
     - `Promise<void>`
+- PuppeteerPool.enrollTask
+  - Static Method
+  - Description: Register a page handler with a unique string id. It returns a `symbol` token you can use when enqueuing tasks.
+  - Args
+    - `id`: string identifier persisted inside queue payloads
+    - `handler`: `(page, payload) => Promise<any>` function
+  - Return: `symbol`
 - PuppeteerPool.runTask
   - Static Method
-  - Description: Run task in pool manager. It will return result of task.
+  - Description: Enqueue payload for a previously enrolled handler. The handler runs once a page slot is available.
   - Args
-  - task
-    - Required
-    - Function
+    - `taskKey`: symbol returned by `enrollTask`
+    - `payload`: serializable object passed to the handler
+    - `priority`: optional number (effective only when `queueProvider` is MEMORY and `taskQueueType` is PRIORITY)
   - Return
   - `Promise<any>`
   - Returns result of task(Same return type with task callback return type)
@@ -155,6 +133,14 @@ Puppeteer-Pool is a lightweight and efficient library for managing multiple Pupp
 
 ```typescript
 import { ContextMode, PuppeteerPool, QueueMode } from '@hoplin/puppeteer-pool';
+
+const visitTask = PuppeteerPool.enrollTask(
+  'visit-url',
+  async (page, payload: { url: string }) => {
+    await page.goto(payload.url);
+    return page.title();
+  },
+);
 
 async function main() {
   await PuppeteerPool.start({
@@ -183,12 +169,7 @@ async function main() {
 
   const promises = urls.map(({ url, priority }) => {
     console.log(`Enqueue task: ${url}`);
-    return PuppeteerPool.runTask(async (page) => {
-      console.log(`Process task for ${url} with priority ${priority}`);
-      await page.goto(url);
-      const title = await page.title();
-      return title;
-    }, priority);
+    return PuppeteerPool.runTask(visitTask, { url }, priority);
   });
 
   const titles = await Promise.all(promises);
@@ -216,14 +197,54 @@ main();
 
 ### Queue Provider Strategy
 
-- Configure `PUPPETEER_POOL_QUEUE_PROVIDER` environment variable (`MEMORY`, `RABBITMQ`, or `ACTIVEMQ`) or pass `queueProvider` to `PuppeteerPool.start`.
+- Configure `PUPPETEER_POOL_QUEUE_PROVIDER` (`MEMORY`, `RABBITMQ`, or `SQS`) or set `queueProvider` in `PuppeteerPool.start`.
 - RabbitMQ provider
-  - Requires the `amqplib` package (install it only when you enable this provider).
-  - Optional envs: `PUPPETEER_POOL_RABBITMQ_URL` (default `amqp://localhost`) and `PUPPETEER_POOL_RABBITMQ_QUEUE` (default `puppeteer_pool_tasks`).
-- ActiveMQ provider
-  - Requires the `stompit` package.
-  - Optional envs: `PUPPETEER_POOL_ACTIVEMQ_URL` (default `stomp://guest:guest@localhost:61613`) and `PUPPETEER_POOL_ACTIVEMQ_QUEUE` (default `/queue/puppeteer_pool_tasks`).
+  - Install `amqplib` only when you enable this provider.
+  - Provide `PUPPETEER_POOL_RABBITMQ_URL` and `PUPPETEER_POOL_RABBITMQ_QUEUE` environment variables.
+- SQS provider
+  - Install `@aws-sdk/client-sqs` only when you enable this provider.
+  - Provide `PUPPETEER_POOL_SQS_QUEUE_URL` and either `PUPPETEER_POOL_SQS_REGION` or `AWS_REGION` for the client.
 - Priority queue mode is only available when `queueProvider` is `MEMORY`.
+
+## Environment Variables
+
+| Variable | Description | Default |
+| --- | --- | --- |
+| `PUPPETEER_POOL_QUEUE_PROVIDER` | Selects queue backend: `MEMORY`, `RABBITMQ`, or `SQS`. | `MEMORY` |
+| `PUPPETEER_POOL_RABBITMQ_URL` | RabbitMQ connection URI, e.g. `amqp://user:pass@host/vhost`. | required when using RabbitMQ |
+| `PUPPETEER_POOL_RABBITMQ_QUEUE` | Queue name for RabbitMQ tasks. | required when using RabbitMQ |
+| `PUPPETEER_POOL_SQS_QUEUE_URL` | Full SQS queue URL. | required when using SQS |
+| `PUPPETEER_POOL_SQS_REGION` / `AWS_REGION` | AWS region for the SQS client. `PUPPETEER_POOL_SQS_REGION` takes precedence. | required when using SQS |
+If you need more control (prefetch counts, SQS wait time, etc.), pass provider-specific options directly to `PuppeteerPool.start`.
+
+## Architecture Overview
+
+```text
+┌────────────────────┐           ┌────────────────────────┐
+│ User Application   │           │     Puppeteer Pool     │
+│  (enroll/run)      │──────────▶│ Registry saves handler │
+└────────┬───────────┘           │ + payload metadata     │
+         │                       └─────────┬──────────────┘
+         │3. TaskMessage enqueued          │
+         ▼                                 ▼
+┌────────────────────┐           ┌────────────────────────┐
+│ Queue Provider     │◀─────────│ Task Dispatcher        │
+│ (Memory/RMQ/SQS)   │           │ (drains queue)         │
+└────────┬───────────┘           └─────────┬──────────────┘
+         │                                 │
+         │4. Assign handler+payload        │
+         ▼                                 ▼
+┌────────────────────┐           ┌────────────────────────┐
+│ Shared/Isolated    │◀────────▶│ Context Slot (per tab) │
+│ Browser Context    │           │                        │
+└────────┬───────────┘           └─────────┬──────────────┘
+         │                                 │
+         │5. Page task executes            │6. Metrics monitor
+         ▼                                 ▼
+┌────────────────────┐           ┌────────────────────────┐
+│ Target Website     │           │ Metrics Watcher        │
+└────────────────────┘           └────────────────────────┘
+```
 
 ## Puppeteer Pool Manager Config
 

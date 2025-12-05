@@ -1,14 +1,16 @@
 import { QueueProvider } from '../pool/enum';
+import { Logger } from 'src/logger';
 
-const ENV_KEY = 'PUPPETEER_POOL_QUEUE_PROVIDER';
+const logger = new Logger();
 
 export function resolveQueueProvider(value?: string): QueueProvider {
   const normalized = value?.toUpperCase();
+  logger.info(`Resolving queue provider: ${normalized}`);
   switch (normalized) {
     case QueueProvider.RABBITMQ:
       return QueueProvider.RABBITMQ;
-    case QueueProvider.ACTIVEMQ:
-      return QueueProvider.ACTIVEMQ;
+    case QueueProvider.SQS:
+      return QueueProvider.SQS;
     case QueueProvider.MEMORY:
       return QueueProvider.MEMORY;
     default:
@@ -17,5 +19,5 @@ export function resolveQueueProvider(value?: string): QueueProvider {
 }
 
 export function envQueueProvider(): QueueProvider {
-  return resolveQueueProvider(process.env[ENV_KEY]);
+  return resolveQueueProvider(process.env.PUPPETEER_POOL_QUEUE_PROVIDER);
 }

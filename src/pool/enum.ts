@@ -37,5 +37,5 @@ export enum QueueMode {
 export enum QueueProvider {
   MEMORY = 'MEMORY',
   RABBITMQ = 'RABBITMQ',
-  ACTIVEMQ = 'ACTIVEMQ',
+  SQS = 'SQS',
 }

@@ -1,6 +1,11 @@
+import {
+  RabbitMQConnectionUrlNotSetException,
+  RabbitMQQueueNameNotSetException,
+  RabbitMQQueueNotInitializedException,
+} from '../error/queue';
 import { lazyImportModule } from '../utils/module-loader';
 import { IQueue, QueueElement } from './queue.interface';
-import { randomUUID } from 'node:crypto';
+import { generateId } from './utils';
 
 type AmqpConnection = any;
 type AmqpChannel = any;
@@ -12,43 +17,36 @@ type RabbitMQQueueOptions = {
   prefetch?: number;
 };
 
-type PendingMessage = {
-  id: string;
+type PendingMessage<T> = {
+  element: QueueElement<T>;
   message: AmqpMessage;
-};
-
-const DEFAULT_URL = 'amqp://localhost';
-const DEFAULT_QUEUE = 'puppeteer_pool_tasks';
-
-const generateId = () => {
-  if (typeof randomUUID === 'function') {
-    return randomUUID();
-  }
-  return Math.random().toString(36).substring(2, 10);
 };
 
 export class RabbitMQQueue<T> implements IQueue<T> {
   private connection: AmqpConnection;
   private channel: AmqpChannel;
   private consumerTag?: string;
-  private readonly taskStore = new Map<string, QueueElement<T>>();
-  private readonly pendingMessages: PendingMessage[] = [];
+  private readonly pendingMessages: PendingMessage<T>[] = [];
   private availabilityListener?: () => void;
 
   constructor(private readonly options: RabbitMQQueueOptions = {}) {}
 
   private get queueName() {
-    return (
-      this.options.queueName ||
-      process.env.PUPPETEER_POOL_RABBITMQ_QUEUE ||
-      DEFAULT_QUEUE
-    );
+    const queueName =
+      this.options.queueName || process.env.PUPPETEER_POOL_RABBITMQ_QUEUE;
+    if (!queueName) {
+      throw new RabbitMQQueueNameNotSetException();
+    }
+    return queueName;
   }
 
   private get connectionUrl() {
-    return (
-      this.options.url || process.env.PUPPETEER_POOL_RABBITMQ_URL || DEFAULT_URL
-    );
+    const connectionUrl =
+      this.options.url || process.env.PUPPETEER_POOL_RABBITMQ_URL;
+    if (!connectionUrl) {
+      throw new RabbitMQConnectionUrlNotSetException();
+    }
+    return connectionUrl;
   }
 
   public async init() {
@@ -68,9 +66,22 @@ export class RabbitMQQueue<T> implements IQueue<T> {
         if (!message) {
           return;
         }
-        const taskId = message.content.toString();
-        this.pendingMessages.push({ id: taskId, message });
-        this.availabilityListener?.();
+        try {
+          const parsed = JSON.parse(
+            message.content.toString(),
+          ) as QueueElement<T> & {
+            enqueuedAt: string;
+          };
+          const element: QueueElement<T> = {
+            id: parsed.id,
+            element: parsed.element,
+            enqueuedAt: new Date(parsed.enqueuedAt),
+          };
+          this.pendingMessages.push({ element, message });
+          this.availabilityListener?.();
+        } catch {
+          this.channel?.nack(message, false, false);
+        }
       },
       { noAck: false },
     );
@@ -100,14 +111,11 @@ export class RabbitMQQueue<T> implements IQueue<T> {
       element: param.element,
       enqueuedAt: new Date(),
     };
-    this.taskStore.set(elementId, queueElement);
     if (!this.channel) {
-      throw new Error(
-        'RabbitMQ queue is not initialized. Ensure init() is awaited before enqueueing tasks.',
-      );
+      throw new RabbitMQQueueNotInitializedException();
     }
-    const payload = Buffer.from(elementId, 'utf-8');
-    this.channel?.sendToQueue(this.queueName, payload, {
+    const payload = Buffer.from(JSON.stringify(queueElement), 'utf-8');
+    this.channel.sendToQueue(this.queueName, payload, {
       persistent: true,
       messageId: elementId,
       timestamp: Date.now(),
@@ -120,28 +128,30 @@ export class RabbitMQQueue<T> implements IQueue<T> {
     if (!pending) {
       return null;
     }
-    const element = this.taskStore.get(pending.id);
-    this.taskStore.delete(pending.id);
     if (pending.message) {
       this.channel?.ack(pending.message);
     }
-    return element ?? null;
+    return pending.element;
   }
 
   public remove(id: string): void {
-    this.taskStore.delete(id);
+    const index = this.pendingMessages.findIndex(
+      (pending) => pending.element.id === id,
+    );
+    if (index >= 0) {
+      this.pendingMessages.splice(index, 1);
+    }
   }
 
   public get size(): number {
-    return this.taskStore.size;
+    return this.pendingMessages.length;
   }
 
   public get isEmpty(): boolean {
-    return this.taskStore.size === 0;
+    return this.pendingMessages.length === 0;
   }
 
   public clear(): void {
-    this.taskStore.clear();
     this.pendingMessages.length = 0;
     if (this.channel) {
       void this.channel.purgeQueue(this.queueName);
@@ -149,11 +159,11 @@ export class RabbitMQQueue<T> implements IQueue<T> {
   }
 
   public contains(id: string): boolean {
-    return this.taskStore.has(id);
+    return this.pendingMessages.some((pending) => pending.element.id === id);
   }
 
   public values(): QueueElement<T>[] {
-    return Array.from(this.taskStore.values());
+    return this.pendingMessages.map((pending) => pending.element);
   }
 
   public onAvailable(callback: () => void): void {

@@ -1,17 +1,18 @@
 import {
-  ActiveMQQueue,
   IQueue,
   PriorityQueue,
   Queue,
   RabbitMQQueue,
+  SQSQueue,
 } from '../queue';
 import { ContextMode, EventTags, QueueMode, QueueProvider } from './enum';
 import { IsolateContext, SharedContext, TaskContext } from './context';
-import { RequestedTask, RunTaskResponse } from '../types/type';
+import { RunTaskResponse, TaskMessage } from '../types/type';
 import { PoolNotInitializedException } from '../error/pool';
 import { MetricsWatcher } from '../watcher/metrics';
 import { ConfigType, loadConfig } from '../configs';
 import { PuppeteerLaunchOptions } from 'puppeteer';
+import { taskRegistry } from './task-registry';
 import { Logger, LogLevel } from '../logger';
 import { EventEmitter } from 'node:events';
 import * as puppeteer from 'puppeteer';
@@ -31,7 +32,7 @@ const INTERNAL_EVENTS = {
 
 export class TaskDispatcher extends EventEmitter {
   // Task Queue
-  private taskQueue: IQueue<RequestedTask>;
+  private taskQueue: IQueue<TaskMessage>;
 
   // Context Queue
   private idleContextQueue: IQueue<TaskContext> = new Queue<TaskContext>();
@@ -84,7 +85,7 @@ export class TaskDispatcher extends EventEmitter {
         contextId: string;
         context: TaskContext;
         taskId: string;
-        task: RequestedTask;
+        task: TaskMessage;
       }[] = [];
       for (let i = 0; i < batchCount; i++) {
         const context = this.idleContextQueue.dequeue();
@@ -128,27 +129,34 @@ export class TaskDispatcher extends EventEmitter {
   ) {
     this.queueProvider = queueProvider;
     this.taskQueue = await this.createTaskQueue(queueProvider, taskQueueType);
+
     if (this.taskQueue?.init) {
       await this.taskQueue.init();
     }
+
     this.taskQueue?.onAvailable?.(() => {
       if (!this.isRestarting) {
         this.emit(this.runTaskEvent);
       }
     });
+
     // Logger setting
     this.enableLog = enableLog;
     this.logLevel = logLevel;
     this.logger.setEnabled(enableLog);
     this.logger.setLogLevel(logLevel);
+
     // Read Config
     this.poolConfig = loadConfig(customPoolConfigPath);
     this.logger.info('Initializing Task Dispatcher');
+
     // Set instance variables
     this.concurrencyLevel = concurrencyLevel;
+
     // Context Mode and Puppeteer launch options
     this.contextMode = contextMode;
     this.launchOptions = options;
+
     // Initialize Main Browser
     this.browser = await puppeteer.launch({
       ...this.launchOptions,
@@ -161,6 +169,7 @@ export class TaskDispatcher extends EventEmitter {
     // Initialize contexts
     for (let i = 0; i < concurrencyLevel; i++) {
       let id = '';
+
       if (contextMode === ContextMode.SHARED) {
         const instance = new SharedContext(
           this.browser,
@@ -176,6 +185,7 @@ export class TaskDispatcher extends EventEmitter {
         await instance.init();
         id = this.idleContextQueue.enqueue({ element: instance });
       }
+
       this.logger.info(`Context initialized - ID: ${id}`);
     }
     // Start Metrics Watcher
@@ -295,10 +305,10 @@ export class TaskDispatcher extends EventEmitter {
     }
   }
 
-  async dispatchTask<T>(
-    task: RequestedTask<T>,
+  async dispatchTask<TResult>(
+    task: TaskMessage,
     priority?: number,
-  ): Promise<RunTaskResponse<T>> {
+  ): Promise<RunTaskResponse<TResult>> {
     if (!this.isInitialized) {
       throw new PoolNotInitializedException();
     }
@@ -308,10 +318,10 @@ export class TaskDispatcher extends EventEmitter {
       priority: priority,
     });
     this.taskEvents.set(taskId, event);
-    const resultListener: Promise<RunTaskResponse<T>> = new Promise(
+    const resultListener: Promise<RunTaskResponse<TResult>> = new Promise(
       (resolve) => {
         // Wait until task is done and return result
-        event.once(EventTags.DONE, (result: RunTaskResponse<T>) => {
+        event.once(EventTags.DONE, (result: RunTaskResponse<TResult>) => {
           resolve(result);
         });
         // Emit run task if idle context exist and dispatcher is not restarting state
@@ -335,7 +345,7 @@ export class TaskDispatcher extends EventEmitter {
     contextId: string,
     context: TaskContext,
     taskId: string,
-    task: RequestedTask,
+    task: TaskMessage,
   ) {
     if (!this.isInitialized) {
       throw new PoolNotInitializedException();
@@ -351,7 +361,8 @@ export class TaskDispatcher extends EventEmitter {
       this.logger.info(`Fixing context due to non-responsive`);
       await context.fix();
     }
-    const result = await context.runTask(task);
+    const record = taskRegistry.resolveById(task.handlerId);
+    const result = await context.runTask(record.handler, task.payload);
     taskEvent.emit(EventTags.DONE, result);
     // Resolve task event
     this.taskEvents.delete(taskId);
@@ -380,11 +391,11 @@ export class TaskDispatcher extends EventEmitter {
   private async createTaskQueue(
     provider: QueueProvider,
     queueMode: QueueMode,
-  ): Promise<IQueue<RequestedTask>> {
+  ): Promise<IQueue<TaskMessage>> {
     if (provider === QueueProvider.MEMORY) {
       return queueMode === QueueMode.DEFAULT
-        ? new Queue()
-        : new PriorityQueue();
+        ? new Queue<TaskMessage>()
+        : new PriorityQueue<TaskMessage>();
     }
     if (queueMode === QueueMode.PRIORITY) {
       this.logger.warn(
@@ -392,11 +403,11 @@ export class TaskDispatcher extends EventEmitter {
       );
     }
     if (provider === QueueProvider.RABBITMQ) {
-      return new RabbitMQQueue<RequestedTask>();
+      return new RabbitMQQueue<TaskMessage>();
     }
-    if (provider === QueueProvider.ACTIVEMQ) {
-      return new ActiveMQQueue<RequestedTask>();
+    if (provider === QueueProvider.SQS) {
+      return new SQSQueue<TaskMessage>();
     }
-    return new Queue();
+    return new Queue<TaskMessage>();
   }
 }
