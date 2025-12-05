@@ -75,7 +75,7 @@ export class PuppeteerPool {
       contextMode: ContextMode.SHARED,
       options: {},
       enableLog: true,
-      taskQueueType: QueueMode.PRIORITY,
+      taskQueueType: QueueMode.DEFAULT,
       queueProvider: envQueueProvider(),
       logLevel: LogLevel.DEBUG,
       ...options,

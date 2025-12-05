@@ -1,5 +1,5 @@
 import { QueueProvider } from '../pool/enum';
-import { Logger } from 'src/logger';
+import { Logger } from '../logger';
 
 const logger = new Logger();
 

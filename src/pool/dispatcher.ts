@@ -1,4 +1,5 @@
 import {
+  IExternalQueue,
   IQueue,
   PriorityQueue,
   Queue,
@@ -92,16 +93,16 @@ export class TaskDispatcher extends EventEmitter {
         const task = this.taskQueue.dequeue();
         if (!task) {
           this.idleContextQueue.enqueue({
-            element: context.element,
+            payload: context.payload,
             id: context.id,
           });
           continue;
         }
         batchTasks.push({
           contextId: context.id,
-          context: context.element,
+          context: context.payload,
           taskId: task.id,
-          task: task.element,
+          task: task.payload,
         });
       }
       await Promise.all(
@@ -130,15 +131,14 @@ export class TaskDispatcher extends EventEmitter {
     this.queueProvider = queueProvider;
     this.taskQueue = await this.createTaskQueue(queueProvider, taskQueueType);
 
-    if (this.taskQueue?.init) {
+    if (this.isExternalQueue(this.taskQueue)) {
+      this.taskQueue.onAvailable(() => {
+        if (!this.isRestarting) {
+          this.emit(this.runTaskEvent);
+        }
+      });
       await this.taskQueue.init();
     }
-
-    this.taskQueue?.onAvailable?.(() => {
-      if (!this.isRestarting) {
-        this.emit(this.runTaskEvent);
-      }
-    });
 
     // Logger setting
     this.enableLog = enableLog;
@@ -176,14 +176,14 @@ export class TaskDispatcher extends EventEmitter {
           this.poolConfig.context.timeout,
         );
         await instance.init();
-        id = this.idleContextQueue.enqueue({ element: instance });
+        id = this.idleContextQueue.enqueue({ payload: instance });
       } else {
         const instance = new IsolateContext(
           this.browser,
           this.poolConfig.context.timeout,
         );
         await instance.init();
-        id = this.idleContextQueue.enqueue({ element: instance });
+        id = this.idleContextQueue.enqueue({ payload: instance });
       }
 
       this.logger.info(`Context initialized - ID: ${id}`);
@@ -263,7 +263,7 @@ export class TaskDispatcher extends EventEmitter {
           );
           await instance.init();
           id = this.idleContextQueue.enqueue({
-            element: instance,
+            payload: instance,
           });
         } else {
           const instance = new IsolateContext(
@@ -272,7 +272,7 @@ export class TaskDispatcher extends EventEmitter {
           );
           await instance.init();
           id = this.idleContextQueue.enqueue({
-            element: instance,
+            payload: instance,
           });
         }
         this.logger.info(`Context initialized - ID: ${id}`);
@@ -314,7 +314,7 @@ export class TaskDispatcher extends EventEmitter {
     }
     const event = new EventEmitter();
     const taskId = this.taskQueue.enqueue({
-      element: task,
+      payload: task,
       priority: priority,
     });
     this.taskEvents.set(taskId, event);
@@ -351,10 +351,18 @@ export class TaskDispatcher extends EventEmitter {
       throw new PoolNotInitializedException();
     }
     this.runningContextQueue.enqueue({
-      element: context,
+      payload: context,
       id: contextId,
     });
     const taskEvent = this.taskEvents.get(taskId);
+    if (!taskEvent) {
+      this.logger.warn('Task event not found for id:', taskId);
+
+      // Remove context from running queue and return to idle queue if task event not found
+      this.runningContextQueue.remove(contextId);
+      this.idleContextQueue.enqueue({ payload: context });
+      return;
+    }
     taskEvent.emit(EventTags.RUNNING);
     // Recover context if non-responsive
     if (!(await context.checkContextResponsive())) {
@@ -369,7 +377,7 @@ export class TaskDispatcher extends EventEmitter {
     // Remove context from running queue and return to idle queue
     this.runningContextQueue.remove(contextId);
     this.idleContextQueue.enqueue({
-      element: context,
+      payload: context,
     });
     // Emit next task if pending task exist
     if (!this.taskQueue.isEmpty) {
@@ -382,7 +390,7 @@ export class TaskDispatcher extends EventEmitter {
     if (this.metricsWatcher) {
       this.metricsWatcher.stopThresholdWatcher();
     }
-    if (this.taskQueue?.dispose) {
+    if (this.isExternalQueue(this.taskQueue)) {
       await this.taskQueue.dispose();
     }
     await this.browser.close();
@@ -409,5 +417,14 @@ export class TaskDispatcher extends EventEmitter {
       return new SQSQueue<TaskMessage>();
     }
     return new Queue<TaskMessage>();
+  }
+
+  private isExternalQueue(
+    queue: IQueue<TaskMessage>,
+  ): queue is IExternalQueue<TaskMessage> {
+    return (
+      this.queueProvider === QueueProvider.RABBITMQ ||
+      this.queueProvider === QueueProvider.SQS
+    );
   }
 }

@@ -3,14 +3,14 @@ import {
   SQSQueueUrlNotSetException,
   SQSRegionNotSetException,
 } from '../error/queue';
+import { IExternalQueue, QueueElement } from './queue.interface';
 import { lazyImportModule } from '../utils/module-loader';
-import { IQueue, QueueElement } from './queue.interface';
 import { generateId } from './utils';
 
 type SqsModule = typeof import('@aws-sdk/client-sqs');
 
 type PendingMessage<T> = {
-  element: QueueElement<T>;
+  entry: QueueElement<T>;
   receiptHandle?: string;
 };
 
@@ -23,7 +23,7 @@ type SQSQueueOptions = {
   pollIntervalMs?: number;
 };
 
-export class SQSQueue<T> implements IQueue<T> {
+export class SQSQueue<T> implements IExternalQueue<T> {
   private client: any;
   private sqsModule: SqsModule | null = null;
   private polling = false;
@@ -96,9 +96,9 @@ export class SQSQueue<T> implements IQueue<T> {
                 enqueuedAt: string;
               };
               this.pendingMessages.push({
-                element: {
+                entry: {
                   id: parsed.id,
-                  element: parsed.element,
+                  payload: parsed.payload,
                   enqueuedAt: new Date(parsed.enqueuedAt),
                 },
                 receiptHandle: message.ReceiptHandle,
@@ -131,11 +131,11 @@ export class SQSQueue<T> implements IQueue<T> {
     this.sqsModule = null;
   }
 
-  public enqueue(param: { element: T; id?: string }): string {
+  public enqueue(param: { payload: T; id?: string }): string {
     const elementId = param.id ?? generateId();
     const queueElement: QueueElement<T> = {
       id: elementId,
-      element: param.element,
+      payload: param.payload,
       enqueuedAt: new Date(),
     };
     const sqsModule = this.sqsModule;
@@ -165,12 +165,12 @@ export class SQSQueue<T> implements IQueue<T> {
       });
       void client.send(deleteCommand);
     }
-    return pending.element;
+    return pending.entry;
   }
 
   public remove(id: string): void {
     const index = this.pendingMessages.findIndex(
-      (pending) => pending.element.id === id,
+      (pending) => pending.entry.id === id,
     );
     if (index >= 0) {
       this.pendingMessages.splice(index, 1);
@@ -190,11 +190,11 @@ export class SQSQueue<T> implements IQueue<T> {
   }
 
   public contains(id: string): boolean {
-    return this.pendingMessages.some((pending) => pending.element.id === id);
+    return this.pendingMessages.some((pending) => pending.entry.id === id);
   }
 
   public values(): QueueElement<T>[] {
-    return this.pendingMessages.map((pending) => pending.element);
+    return this.pendingMessages.map((pending) => pending.entry);
   }
 
   public onAvailable(callback: () => void): void {

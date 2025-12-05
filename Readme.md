@@ -208,13 +208,14 @@ main();
 
 ## Environment Variables
 
-| Variable | Description | Default |
-| --- | --- | --- |
-| `PUPPETEER_POOL_QUEUE_PROVIDER` | Selects queue backend: `MEMORY`, `RABBITMQ`, or `SQS`. | `MEMORY` |
-| `PUPPETEER_POOL_RABBITMQ_URL` | RabbitMQ connection URI, e.g. `amqp://user:pass@host/vhost`. | required when using RabbitMQ |
-| `PUPPETEER_POOL_RABBITMQ_QUEUE` | Queue name for RabbitMQ tasks. | required when using RabbitMQ |
-| `PUPPETEER_POOL_SQS_QUEUE_URL` | Full SQS queue URL. | required when using SQS |
-| `PUPPETEER_POOL_SQS_REGION` / `AWS_REGION` | AWS region for the SQS client. `PUPPETEER_POOL_SQS_REGION` takes precedence. | required when using SQS |
+| Variable                                   | Description                                                                  | Default                      |
+| ------------------------------------------ | ---------------------------------------------------------------------------- | ---------------------------- |
+| `PUPPETEER_POOL_QUEUE_PROVIDER`            | Selects queue backend: `MEMORY`, `RABBITMQ`, or `SQS`.                       | `MEMORY`                     |
+| `PUPPETEER_POOL_RABBITMQ_URL`              | RabbitMQ connection URI, e.g. `amqp://user:pass@host/vhost`.                 | required when using RabbitMQ |
+| `PUPPETEER_POOL_RABBITMQ_QUEUE`            | Queue name for RabbitMQ tasks.                                               | required when using RabbitMQ |
+| `PUPPETEER_POOL_SQS_QUEUE_URL`             | Full SQS queue URL.                                                          | required when using SQS      |
+| `PUPPETEER_POOL_SQS_REGION` / `AWS_REGION` | AWS region for the SQS client. `PUPPETEER_POOL_SQS_REGION` takes precedence. | required when using SQS      |
+
 If you need more control (prefetch counts, SQS wait time, etc.), pass provider-specific options directly to `PuppeteerPool.start`.
 
 ## Architecture Overview

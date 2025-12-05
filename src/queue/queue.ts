@@ -2,17 +2,14 @@ import { IQueue, QueueElement } from './queue.interface';
 
 export class Queue<T> implements IQueue<T> {
   private queue: QueueElement<T>[] = [];
-  private availabilityListener?: () => void;
 
-  public enqueue(param: { element: T; id?: string }): string {
-    // Suppress UUID usage for CPU Intensive Task
+  public enqueue(param: { payload: T; id?: string }): string {
     const elementId = param.id || Math.random().toString(36).substring(7);
     this.queue.push({
       id: elementId,
-      element: param.element,
+      payload: param.payload,
       enqueuedAt: new Date(),
     });
-    this.availabilityListener?.();
     return elementId;
   }
 
@@ -24,7 +21,7 @@ export class Queue<T> implements IQueue<T> {
   }
 
   public remove(id: string): void {
-    this.queue = this.queue.filter((element) => element.id !== id);
+    this.queue = this.queue.filter((entry) => entry.id !== id);
   }
 
   public get size(): number {
@@ -40,14 +37,10 @@ export class Queue<T> implements IQueue<T> {
   }
 
   public contains(id: string): boolean {
-    return this.queue.some((element) => element.id === id);
+    return this.queue.some((entry) => entry.id === id);
   }
 
   public values(): QueueElement<T>[] {
     return this.queue;
-  }
-
-  public onAvailable(callback: () => void): void {
-    this.availabilityListener = callback;
   }
 }

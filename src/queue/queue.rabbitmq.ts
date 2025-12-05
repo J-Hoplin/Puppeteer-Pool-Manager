@@ -3,8 +3,8 @@ import {
   RabbitMQQueueNameNotSetException,
   RabbitMQQueueNotInitializedException,
 } from '../error/queue';
+import { IExternalQueue, QueueElement } from './queue.interface';
 import { lazyImportModule } from '../utils/module-loader';
-import { IQueue, QueueElement } from './queue.interface';
 import { generateId } from './utils';
 
 type AmqpConnection = any;
@@ -18,11 +18,11 @@ type RabbitMQQueueOptions = {
 };
 
 type PendingMessage<T> = {
-  element: QueueElement<T>;
+  entry: QueueElement<T>;
   message: AmqpMessage;
 };
 
-export class RabbitMQQueue<T> implements IQueue<T> {
+export class RabbitMQQueue<T> implements IExternalQueue<T> {
   private connection: AmqpConnection;
   private channel: AmqpChannel;
   private consumerTag?: string;
@@ -60,6 +60,8 @@ export class RabbitMQQueue<T> implements IQueue<T> {
     if (this.options.prefetch) {
       await this.channel.prefetch(this.options.prefetch);
     }
+
+    // Consumer 등록. 추후 Consumer 정리시 필요함(dispose)
     const result = await this.channel.consume(
       this.queueName,
       (message: AmqpMessage) => {
@@ -72,12 +74,12 @@ export class RabbitMQQueue<T> implements IQueue<T> {
           ) as QueueElement<T> & {
             enqueuedAt: string;
           };
-          const element: QueueElement<T> = {
+          const entry: QueueElement<T> = {
             id: parsed.id,
-            element: parsed.element,
+            payload: parsed.payload,
             enqueuedAt: new Date(parsed.enqueuedAt),
           };
-          this.pendingMessages.push({ element, message });
+          this.pendingMessages.push({ entry, message });
           this.availabilityListener?.();
         } catch {
           this.channel?.nack(message, false, false);
@@ -103,11 +105,11 @@ export class RabbitMQQueue<T> implements IQueue<T> {
     this.pendingMessages.length = 0;
   }
 
-  public enqueue(param: { element: T; id?: string }): string {
+  public enqueue(param: { payload: T; id?: string }): string {
     const elementId = param.id ?? generateId();
     const queueElement: QueueElement<T> = {
       id: elementId,
-      element: param.element,
+      payload: param.payload,
       enqueuedAt: new Date(),
     };
     if (!this.channel) {
@@ -130,12 +132,12 @@ export class RabbitMQQueue<T> implements IQueue<T> {
     if (pending.message) {
       this.channel?.ack(pending.message);
     }
-    return pending.element;
+    return pending.entry;
   }
 
   public remove(id: string): void {
     const index = this.pendingMessages.findIndex(
-      (pending) => pending.element.id === id,
+      (pending) => pending.entry.id === id,
     );
     if (index >= 0) {
       this.pendingMessages.splice(index, 1);
@@ -158,11 +160,11 @@ export class RabbitMQQueue<T> implements IQueue<T> {
   }
 
   public contains(id: string): boolean {
-    return this.pendingMessages.some((pending) => pending.element.id === id);
+    return this.pendingMessages.some((pending) => pending.entry.id === id);
   }
 
   public values(): QueueElement<T>[] {
-    return this.pendingMessages.map((pending) => pending.element);
+    return this.pendingMessages.map((pending) => pending.entry);
   }
 
   public onAvailable(callback: () => void): void {
