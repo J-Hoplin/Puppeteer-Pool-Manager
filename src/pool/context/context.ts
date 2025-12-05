@@ -46,24 +46,31 @@ export abstract class TaskContext {
     handler: TaskHandler<TPayload, TResult>,
     payload: TPayload,
   ): Promise<RunTaskResponse<TResult>> {
+    let timeoutHandle: NodeJS.Timeout | null = null;
     try {
       await this.preparePage();
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+          reject(new Error('Context execution timed out'));
+        }, this.contextTimeoutSecond * 1000);
+      });
       const result = await Promise.race([
         handler(this.page!, payload),
-        new Promise((_, reject) =>
-          setTimeout(() => reject('Timeout'), this.contextTimeoutSecond * 1000),
-        ),
+        timeoutPromise,
       ]);
       return {
         success: true,
         data: result as TResult,
       };
-    } catch (e) {
+    } catch (error) {
       return {
         success: false,
-        error: e as Error,
+        error: error instanceof Error ? error : new Error(String(error)),
       };
     } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
       await this.clearResource();
     }
   }
