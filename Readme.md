@@ -51,19 +51,36 @@ Puppeteer-Pool is a lightweight and efficient library for managing multiple Pupp
   - Description: Initialize pool manager. You need to call this function to start puppeteer pool. Even if you invoke
     this function multiple times with differenct arguments, it will return the first initialized instance.
   - Args: `PuppeteerPoolStartOptions`
+  - Defaults:
+
+    - `concurrencyLevel`: 3
+    - `taskQueueType`: `QueueMode.DEFAULT`
+    - `queueProvider`: `process.env.PUPPETEER_POOL_QUEUE_PROVIDER` or `QueueProvider.MEMORY`
+    - `contextMode`: `ContextMode.SHARED`
+    - `enableLog`: `true`, `logLevel`: `LogLevel.DEBUG`
 
     ```typescript
     type PuppeteerPoolStartOptions = {
       /**
-       * Number of concurrency,
+       * Number of concurrency
        * Default is 3
        */
-      concurrencyLevel: number;
+      concurrencyLevel?: number;
+      /**
+       * Task queue type (DEFAULT | PRIORITY)
+       * Default is QueueMode.DEFAULT
+       */
+      taskQueueType?: QueueMode;
+      /**
+       * Queue provider (MEMORY | RABBITMQ | SQS)
+       * Default is envQueueProvider() or MEMORY
+       */
+      queueProvider?: QueueProvider;
       /**
        * Context mode
        * Default is ContextMode.SHARED
        */
-      contextMode: ContextMode;
+      contextMode?: ContextMode;
       /**
        * Puppeteer launch options
        * Default is {}
@@ -83,17 +100,20 @@ Puppeteer-Pool is a lightweight and efficient library for managing multiple Pupp
        * Default is LogLevel.DEBUG
        */
       logLevel?: LogLevel;
-      /**
-       * Queue provider (MEMORY | RABBITMQ | SQS)
-       * Default is process.env.PUPPETEER_POOL_QUEUE_PROVIDER or MEMORY
-       */
-      queueProvider?: QueueProvider;
     };
     ```
 
   - Return
     - `Promise<PuppeteerPool>`
     - Returns PuppeteerPool Instance.
+
+- PuppeteerPool.restart
+
+  - Static Method
+  - Description: Stop the running dispatcher, tear down active contexts, and start a fresh pool. When `options` are omitted it reuses the last `start()` call, which makes threshold-triggered resets or config reloads simple.
+  - Args: `PuppeteerPoolStartOptions`
+  - Return
+    - `Promise<PuppeteerPool>`
 
 - PuppeteerPool.stop
   - Static Method
@@ -146,7 +166,7 @@ async function main() {
   await PuppeteerPool.start({
     concurrencyLevel: 6,
     contextMode: ContextMode.ISOLATED,
-    customConfigPath: `./puppeteer-pool-config.json`,
+    customConfigPath: `./puppeteer-pool-configs.json`,
     taskQueueType: QueueMode.PRIORITY,
   });
 
@@ -206,6 +226,24 @@ main();
   - Provide `PUPPETEER_POOL_SQS_QUEUE_URL` and either `PUPPETEER_POOL_SQS_REGION` or `AWS_REGION` for the client.
 - Priority queue mode is only available when `queueProvider` is `MEMORY`.
 
+#### MEMORY
+
+- Uses the in-process `Queue` or `PriorityQueue` implementations from `src/queue`.
+- `runTask` enqueues and immediately tries to dispatch if a context slot is free, so it is the lowest-latency option for single-host workers.
+- Priority ordering is honored only when `taskQueueType` is set to `QueueMode.PRIORITY`.
+
+#### RABBITMQ
+
+- `runTask` publishes serialized `TaskMessage` objects to the configured queue. A long-lived consumer drains the queue and hands work to the dispatcher.
+- Messages are acknowledged only after the handler completes, allowing RabbitMQ to redeliver work if the worker process crashes before finishing.
+- Prefetch, durability, or other channel-level tuning can be layered on top of this default behavior.
+
+#### SQS
+
+- Uses `@aws-sdk/client-sqs` with long polling (`ReceiveMessageCommand`) to fetch batches from the queue specified by `PUPPETEER_POOL_SQS_QUEUE_URL`.
+- After a task succeeds the worker issues `DeleteMessageCommand`; failed handlers rely on the queue visibility timeout for retries.
+- Regional configuration is resolved from `PUPPETEER_POOL_SQS_REGION` (or `AWS_REGION`) so you can run the pool in multiple AWS regions.
+
 ## Environment Variables
 
 | Variable                                   | Description                                                                  | Default                      |
@@ -249,7 +287,7 @@ If you need more control (prefetch counts, SQS wait time, etc.), pass provider-s
 
 ## Puppeteer Pool Manager Config
 
-Default config should be `puppeteer-pool-config.json` in root directory path.
+Default config should be `puppeteer-pool-configs.json` in root directory path.
 
 ### Default config setting
 
@@ -293,10 +331,10 @@ config path, you can pass path to `start()` function as parameter.
 ### `threshold`
 
 - `activate`: Activate threshold watcher
-- `interval`: Interval of threshold watcher
-- `memory`: Memory threshold value
+  - `interval`: Interval of threshold watcher (seconds)
+  - `memory`: Memory threshold value (MB)
   - **Inteager Validation**
-    - `interval` should be at least 1
+    - `interval` should be at least 3
     - `interval` should be integer
-    - `memory` should be at least 1
+    - `memory` should be at least 500
     - `memory` should be integer
