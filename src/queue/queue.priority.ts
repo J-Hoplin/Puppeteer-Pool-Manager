@@ -9,17 +9,18 @@ export class PriorityQueue<T> implements IQueue<T> {
     priority?: number;
   }): string {
     const elementId = param.id ?? Math.random().toString(36).substring(7);
+    const priority = param.priority ?? 1;
     const newElement: PriorityQueueElement<T> = {
       id: elementId,
       payload: param.payload,
-      priority: param.priority ?? 1,
+      priority,
       enqueuedAt: new Date(),
     };
 
     let insertIndex = 0;
     while (
       insertIndex < this.queue.length &&
-      this.queue[insertIndex].priority >= param.priority
+      this.queue[insertIndex].priority >= priority
     ) {
       insertIndex++;
     }
