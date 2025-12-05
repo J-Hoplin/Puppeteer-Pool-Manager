@@ -59,6 +59,7 @@ export class TaskDispatcher extends EventEmitter {
   private poolConfig: ConfigType;
   private threshold: { memory: number } = DEFAULT_VALUES.THRESHOLD;
   private queueProvider: QueueProvider = QueueProvider.MEMORY;
+  private taskQueueMode: QueueMode = QueueMode.DEFAULT;
 
   // Logger
   private logger: Logger = new Logger();
@@ -90,6 +91,9 @@ export class TaskDispatcher extends EventEmitter {
       }[] = [];
       for (let i = 0; i < batchCount; i++) {
         const context = this.idleContextQueue.dequeue();
+        if (!context) {
+          break;
+        }
         const task = this.taskQueue.dequeue();
         if (!task) {
           this.idleContextQueue.enqueue({
@@ -129,16 +133,8 @@ export class TaskDispatcher extends EventEmitter {
     customPoolConfigPath?: string,
   ) {
     this.queueProvider = queueProvider;
-    this.taskQueue = await this.createTaskQueue(queueProvider, taskQueueType);
-
-    if (this.isExternalQueue(this.taskQueue)) {
-      this.taskQueue.onAvailable(() => {
-        if (!this.isRestarting) {
-          this.emit(this.runTaskEvent);
-        }
-      });
-      await this.taskQueue.init();
-    }
+    this.taskQueueMode = taskQueueType;
+    await this.setupTaskQueue(queueProvider, taskQueueType);
 
     // Logger setting
     this.enableLog = enableLog;
@@ -243,6 +239,9 @@ export class TaskDispatcher extends EventEmitter {
       }
       // Close browser and previous threshold watcher(If activated) and remove all of the contexts from queue
       await this.close();
+      if (this.isExternalProvider(this.queueProvider)) {
+        await this.setupTaskQueue(this.queueProvider, this.taskQueueMode);
+      }
       this.idleContextQueue.clear();
       this.runningContextQueue.clear();
 
@@ -390,21 +389,41 @@ export class TaskDispatcher extends EventEmitter {
     if (this.metricsWatcher) {
       this.metricsWatcher.stopThresholdWatcher();
     }
-    if (this.isExternalQueue(this.taskQueue)) {
-      await this.taskQueue.dispose();
+    if (this.isExternalProvider(this.queueProvider)) {
+      const externalQueue = this.taskQueue as IExternalQueue<TaskMessage>;
+      await externalQueue.dispose();
     }
     await this.browser.close();
+  }
+
+  private async setupTaskQueue(
+    provider: QueueProvider,
+    queueMode: QueueMode,
+  ): Promise<void> {
+    const queue = await this.createTaskQueue(provider, queueMode);
+    if (this.isExternalProvider(provider)) {
+      const externalQueue = queue as IExternalQueue<TaskMessage>;
+      externalQueue.onAvailable(() => {
+        if (!this.isRestarting) {
+          this.emit(this.runTaskEvent);
+        }
+      });
+      await externalQueue.init();
+    }
+    this.taskQueue = queue;
   }
 
   private async createTaskQueue(
     provider: QueueProvider,
     queueMode: QueueMode,
   ): Promise<IQueue<TaskMessage>> {
+    // Memory Queue
     if (provider === QueueProvider.MEMORY) {
       return queueMode === QueueMode.DEFAULT
         ? new Queue<TaskMessage>()
         : new PriorityQueue<TaskMessage>();
     }
+    // RabbitMQ Queue
     if (queueMode === QueueMode.PRIORITY) {
       this.logger.warn(
         'Priority queue is not supported with external queue providers. Falling back to default ordering.',
@@ -419,12 +438,9 @@ export class TaskDispatcher extends EventEmitter {
     return new Queue<TaskMessage>();
   }
 
-  private isExternalQueue(
-    queue: IQueue<TaskMessage>,
-  ): queue is IExternalQueue<TaskMessage> {
+  private isExternalProvider(provider: QueueProvider) {
     return (
-      this.queueProvider === QueueProvider.RABBITMQ ||
-      this.queueProvider === QueueProvider.SQS
+      provider === QueueProvider.RABBITMQ || provider === QueueProvider.SQS
     );
   }
 }
